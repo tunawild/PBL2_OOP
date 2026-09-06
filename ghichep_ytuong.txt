@@ -1,0 +1,23 @@
+phương tiện:
+    - xe oto : sạc điện bằng cổng sạc ở trạm sạc 
+    - xe máy : 
+        + thay pin ở tủ đổi pin 
+        + sạc điện ở trạm sạc
+    - biển số   
+    - dung lượng pin 
+    - phần trăm pin 
+
+người dùng
+
+trạm sạc:
+    - địa chỉ, id
+
+trạm đổi 
+    - địa chỉ, id
+
+đồng hồ điện
+    - tổng kwh
+
+cổng sạc:
+    - trạng thái 
+
