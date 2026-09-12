@@ -8,6 +8,7 @@ phương tiện:
     - phần trăm pin 
 
 người dùng
+    - 
 
 trạm sạc:
     - địa chỉ, id
