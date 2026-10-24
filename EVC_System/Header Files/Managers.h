@@ -1,8 +1,7 @@
-﻿#pragma once
+#pragma once
 #include "Models.h"
 #include <vector>
 #include <string>
-#include <map>
 
 using namespace std;
 
@@ -24,8 +23,10 @@ public:
     Customer* getCustomerById(const string& id);
     void toggleCustomerLock(const string& id);
     
-    // For registration
+    // Thêm khách hàng mới
     void addCustomer(const Customer& c);
+    bool usernameExists(const string& username);
+    string generateNextCustomerId();
 };
 
 class StationManager {
@@ -39,12 +40,16 @@ public:
     vector<ChargingStation>& getStations();
     ChargingStation* getStationById(const string& id);
     void addStation(const ChargingStation& st);
-    bool deleteStation(const string& id); // returns false if ports are charging
+    bool deleteStation(const string& id); // chỉ xóa khi không có cổng nào đang sạc
     void updateStation(const string& id, const string& name, const string& address);
 
     void addPortToStation(const string& stationId, const ChargingPort& port);
+    bool deletePort(const string& stationId, const string& portId);
     void updatePortStatus(const string& stationId, const string& portId, PortStatus newStatus);
     void updatePortPrice(const string& stationId, const string& portId, float newPrice);
+
+    string generateNextStationId();
+    string generateNextPortId(const string& stationId);
 
     // Dashboard stats
     int getTotalStations();
@@ -67,6 +72,9 @@ public:
     // Customer actions
     bool startSession(const string& customerId, const string& stationId, const string& portId, StationManager& sm);
     bool endSession(const string& customerId, StationManager& sm, UserManager& um);
+    ChargingSession* getActiveSession(const string& customerId);
+    Invoice* getLastInvoice(const string& customerId);
+    vector<Invoice> getInvoicesByCustomer(const string& customerId);
 
     // Dashboard stats
     float getTotalRevenue();
@@ -75,7 +83,6 @@ public:
 
 class DataManager {
 public:
-    // Helper methods to read/write custom TXT/JSON
     static void loadAll(UserManager& um, StationManager& sm, SessionManager& sem);
     static void saveAll(UserManager& um, StationManager& sm, SessionManager& sem);
 };

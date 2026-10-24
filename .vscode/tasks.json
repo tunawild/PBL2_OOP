@@ -2,74 +2,38 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "build debug",
-            "type": "process",
-            "command": "make",
+            "type": "shell",
+            "label": "Build EV Charging System",
+            "command": "g++",
             "args": [
-                "PLATFORM=PLATFORM_DESKTOP",
-                "BUILD_MODE=DEBUG",
-                "PROJECT_NAME=main",
-                "OBJS=EVC_System/Source\\ Files/main.cpp",
-                "COMPILER_NAME=g++"
+                "-std=c++11",
+                "-g",
+                "main.cpp",
+                "EVC_System/Source Files/Models.cpp",
+                "EVC_System/Source Files/Managers.cpp",
+                "EVC_System/Source Files/UI.cpp",
+                "-I.",
+                "-I${workspaceFolder}/EVC_System/Header Files",
+                "-IC:/raylib/raylib/src",
+                "-LC:/raylib/raylib/src",
+                "-lraylib",
+                "-lopengl32",
+                "-lgdi32",
+                "-lwinmm",
+                "-o",
+                "${workspaceFolder}/EVC_System.exe"
             ],
-            "windows": {
-                "command": "mingw32-make.exe",
-                "args": [
-                    "RAYLIB_PATH=C:/raylib/raylib",
-                    "PROJECT_NAME=main",
-                    "OBJS=EVC_System/Source\\ Files/main.cpp",
-                    "COMPILER_NAME=g++",
-                    "BUILD_MODE=DEBUG"
-                ]
+            "options": {
+                "cwd": "${workspaceFolder}"
             },
-            "osx": {
-                "args": [
-                    "RAYLIB_PATH=<path_to_raylib>/raylib",
-                    "PROJECT_NAME=main",
-                    "OBJS=EVC_System/Source\\ Files/main.cpp",
-                    "COMPILER_NAME=g++",
-                    "BUILD_MODE=DEBUG"
-                ]
-            },
+            "problemMatcher": [
+                "$gcc"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
             },
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "build release",
-            "type": "process",
-            "command": "make",
-            "args": [
-                "PLATFORM=PLATFORM_DESKTOP",
-                "PROJECT_NAME=main",
-                "OBJS=EVC_System/Source\\ Files/main.cpp",
-                "COMPILER_NAME=g++"
-            ],
-            "windows": {
-                "command": "mingw32-make.exe",
-                "args": [
-                    "RAYLIB_PATH=C:/raylib/raylib",
-                    "PROJECT_NAME=main",
-                    "OBJS=EVC_System/Source\\ Files/main.cpp",
-                    "COMPILER_NAME=g++"
-                ]
-            },
-            "osx": {
-                "args": [
-                    "RAYLIB_PATH=<path_to_raylib>/raylib",
-                    "PROJECT_NAME=main",
-                    "OBJS=EVC_System/Source\\ Files/main.cpp",
-                    "COMPILER_NAME=g++"
-                ]
-            },
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
+            "detail": "Biên dịch toàn bộ dự án EV Charging System"
         }
     ]
 }

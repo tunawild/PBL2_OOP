@@ -1,0 +1,2 @@
+sessionId|customerId|stationId|portId|startTime|endTime|energyKWh|cost|isActive
+SES_1792830300|C01|ST01|P01|1792830300|1792830315|5.50|19250|0

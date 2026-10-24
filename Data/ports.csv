@@ -1,0 +1,4 @@
+stationId|portId|type|powerKW|status|pricePerKWh|currentSessionId
+ST01|P01|2|22|0|3500|
+ST01|P02|2|22|0|3500|
+ST02|P01|1|22|0|3500|
