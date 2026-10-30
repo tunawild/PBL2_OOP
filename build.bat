@@ -1,4 +1,5 @@
 @echo off
+taskkill /F /IM EVC_System.exe >nul 2>&1
 set CXX=g++
 set CXXFLAGS=-Wall -std=c++11 -O2
 set INCLUDES=-I. -I"C:\raylib\raylib\src" -I"EVC_System\Header Files"

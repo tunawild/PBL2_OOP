@@ -29,7 +29,8 @@ enum AppState {
 
 /**
  * @brief Lop AppUI quan ly toan bo giao dien do hoa Raylib/Raygui,
- * dieu phoi cac su kien chuot, phim va chuyen doi qua lai giua cac man hinh.
+ * ho tro phong to toan man hinh (Fullscreen/Maximized Responsive)
+ * va su dung phong chu Segoe UI ro rang, sac net, de doc.
  */
 class AppUI {
 private:
@@ -39,6 +40,7 @@ private:
     SessionManager& sem;
 
     AppState currentState;      // Trang thai man hinh hien tai
+    Font uiFont;                // Phong chu he thong Segoe UI giup chu to ro, min mang
 
     /**
      * @brief Ham tien ich tu dong ghi luu toan bo du lieu ra tep CSV
@@ -116,6 +118,11 @@ public:
     AppUI(UserManager& u, StationManager& s, SessionManager& se);
 
     /**
+     * @brief Destructor giai phong phong chu neu co
+     */
+    ~AppUI();
+
+    /**
      * @brief Khoi tao style va font cho thu vien do hoa Raygui
      */
     void Init();
@@ -124,6 +131,16 @@ public:
      * @brief Ham cap nhat logic va ve khung hinh (duoc goi lien tuc trong vong lap chinh)
      */
     void UpdateDrawFrame();
+
+    /**
+     * @brief Ham tien ich ve chu voi phong chu Segoe UI mượt mà sắc nét
+     */
+    void DrawTextUI(const string& text, float posX, float posY, float fontSize, Color color);
+
+    /**
+     * @brief Ham tien ich ve chu can giua man hinh theo chieu ngang
+     */
+    void DrawTextUICentered(const string& text, float posY, float fontSize, Color color);
 
 private:
     // --- Cac ham ve giao dien theo tung man hinh ---
