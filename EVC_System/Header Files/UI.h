@@ -5,29 +5,49 @@
 
 using namespace std;
 
+// =====================================================================
+// ENUM TRANG THAI MAN HINH GIAO DIEN (APP STATE)
+// =====================================================================
+
+/**
+ * @brief Enum quan ly cac trang thai man hinh trong ung dung (State Pattern)
+ */
 enum AppState {
-    STATE_LOGIN,
-    STATE_ADMIN_DASHBOARD,
-    STATE_ADMIN_STATIONS,
-    STATE_ADMIN_CUSTOMERS,
-    STATE_ADMIN_INVOICES,
-    STATE_CUSTOMER_MENU,
-    STATE_CUSTOMER_CHARGING,
-    STATE_CUSTOMER_RECEIPT
+    STATE_LOGIN,                // Man hinh Dang nhap
+    STATE_ADMIN_DASHBOARD,      // Man hinh Tong quan (Dashboard) cho Admin
+    STATE_ADMIN_STATIONS,       // Man hinh Quan ly tram va cong sac cho Admin
+    STATE_ADMIN_CUSTOMERS,      // Man hinh Quan ly khach hang & nap tien cho Admin
+    STATE_ADMIN_INVOICES,       // Man hinh Quan ly hoa don toan he thong cho Admin
+    STATE_CUSTOMER_MENU,        // Man hinh Menu chinh cho Khach hang
+    STATE_CUSTOMER_CHARGING,    // Man hinh Dang thuc hien sac xe cho Khach hang
+    STATE_CUSTOMER_RECEIPT      // Man hinh Bien lai hoa don sau khi dung sac
 };
 
+// =====================================================================
+// LOP QUAN LY GIAO DIEN NGUOI DUNG (APP UI)
+// =====================================================================
+
+/**
+ * @brief Lop AppUI quan ly toan bo giao dien do hoa Raylib/Raygui,
+ * dieu phoi cac su kien chuot, phim va chuyen doi qua lai giua cac man hinh.
+ */
 class AppUI {
 private:
+    // --- Tham chieu den cac lop quan ly nghiep vu (OOP: Dependency Injection) ---
     UserManager& um;
     StationManager& sm;
     SessionManager& sem;
-    AppState currentState;
 
+    AppState currentState;      // Trang thai man hinh hien tai
+
+    /**
+     * @brief Ham tien ich tu dong ghi luu toan bo du lieu ra tep CSV
+     */
     void autoSave() {
         DataManager::saveAll(um, sm, sem);
     }
 
-    // --- Login screen state ---
+    // --- Trang thai Man hinh Dang nhap ---
     char loginUsername[64];
     char loginPassword[64];
     bool loginUsernameActive;
@@ -35,10 +55,10 @@ private:
     bool loginError;
     string loginErrorMsg;
 
-    // --- Admin state ---
+    // --- Trang thai Sidebar Admin ---
     int adminMenuSelected;
     
-    // Admin: Form thêm trạm sạc
+    // --- Trang thai Form Them Tram sac (Admin) ---
     char newStationName[128];
     char newStationAddress[128];
     bool activeStationName;
@@ -46,16 +66,16 @@ private:
     string stationStatusMsg;
     bool showAddStationForm;
 
-    // Admin: Form thêm cổng sạc
+    // --- Trang thai Form Them Cong sac vao Tram (Admin) ---
     string targetStationIdForPort;
-    int selectedPortType; // 0: AC, 1: DC Fast, 2: Supercharge
+    int selectedPortType;       // 0: AC Standard, 1: DC Fast, 2: Supercharge
     char newPortPower[32];
     char newPortPrice[32];
     bool activePortPower;
     bool activePortPrice;
     bool showAddPortForm;
 
-    // Admin: Tìm kiếm & Thêm khách hàng
+    // --- Trang thai Quan ly & Them Khach hang (Admin) ---
     char customerSearch[128];
     bool activeCustomerSearch;
     bool showAddCustomerForm;
@@ -67,17 +87,21 @@ private:
     char newCustCarModel[32];
     char newCustBattery[32];
     char newCustBalance[32];
-    int activeCustField; // 0: None, 1: User, 2: Pass, 3: Name, 4: Phone, 5: Plate, 6: Car, 7: Bat, 8: Bal
+    int activeCustField;        // Chi so o text dang focus
     string customerStatusMsg;
 
-    // --- Customer state ---
-    int customerTab; // 0: Trạm & Cổng, 1: Nạp tiền, 2: Lịch sử hóa đơn
-    string customerErrorMsg;
-    char topupAmountStr[32];
-    bool activeTopupAmount;
-    string topupStatusMsg;
+    // --- Trang thai Admin Nap Tien cho Khach hang ---
+    bool showTopupModal;
+    string topupTargetCustomerId;
+    char adminTopupAmount[32];
+    bool activeAdminTopup;
+    string adminTopupMsg;
 
-    // Last invoice data for Receipt screen
+    // --- Trang thai Giao dien Khach hang ---
+    int customerTab;            // 0: Tra cuu & Sac dien, 1: Lich su hoa don
+    string customerErrorMsg;
+
+    // --- Du lieu Bien lai Hoa don (Receipt) sau khi dung sac ---
     string receiptInvoiceId;
     string receiptStationName;
     string receiptPortId;
@@ -86,11 +110,23 @@ private:
     float receiptRemainingBal;
 
 public:
+    /**
+     * @brief Constructor khoi tao AppUI voi cac Manager tuong ung
+     */
     AppUI(UserManager& u, StationManager& s, SessionManager& se);
+
+    /**
+     * @brief Khoi tao style va font cho thu vien do hoa Raygui
+     */
     void Init();
+
+    /**
+     * @brief Ham cap nhat logic va ve khung hinh (duoc goi lien tuc trong vong lap chinh)
+     */
     void UpdateDrawFrame();
 
 private:
+    // --- Cac ham ve giao dien theo tung man hinh ---
     void DrawLogin();
     void DrawAdminDashboard();
     void DrawAdminStations();
@@ -102,4 +138,5 @@ private:
     void DrawCustomerReceipt();
 
     void DrawAdminSidebar();
+    void DrawAdminTopupModal(); // Hop thoai nap tien cho khach
 };

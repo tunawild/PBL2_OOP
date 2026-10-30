@@ -7,12 +7,18 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <cmath>
 
 using namespace std;
 
 // =====================================================================
-// Helper formatting functions
+// CAC HAM HO TRO DINH DANG (FORMAT HELPERS)
 // =====================================================================
+
+/**
+ * @brief Dinh dang so tien sang chuoi tien te Viet Nam Dong (VND) co dau phay ngan cach.
+ * Vi du: 500000 -> "500,000 VND"
+ */
 static string formatMoney(float amount) {
     long long val = (long long)amount;
     string s = to_string(val);
@@ -30,6 +36,10 @@ static string formatMoney(float amount) {
     return res + " VND";
 }
 
+/**
+ * @brief Chuyen doi gia tri thoi gian timestamp sang chuoi ngay gio de doc
+ * Vi du: 1792830315 -> "24/10/2026 14:45"
+ */
 static string formatTime(long long ts) {
     if (ts <= 0) return "--:--";
     time_t t = (time_t)ts;
@@ -39,6 +49,9 @@ static string formatTime(long long ts) {
     return string(buf);
 }
 
+/**
+ * @brief Chuyen doi toan bo chuoi sang chu thuong de phuc vu tim kiem
+ */
 static string toLower(const string& str) {
     string res = str;
     for (char &c : res) c = (char)tolower((unsigned char)c);
@@ -46,8 +59,9 @@ static string toLower(const string& str) {
 }
 
 // =====================================================================
-// AppUI Implementation
+// CAI DAT CONSTRUCTOR VA KHOI TAO APP UI
 // =====================================================================
+
 AppUI::AppUI(UserManager& u, StationManager& s, SessionManager& se)
     : um(u), sm(s), sem(se), currentState(STATE_LOGIN),
       loginUsernameActive(false), loginPasswordActive(false), loginError(false), loginErrorMsg(""),
@@ -55,9 +69,11 @@ AppUI::AppUI(UserManager& u, StationManager& s, SessionManager& se)
       activeStationName(false), activeStationAddress(false), stationStatusMsg(""), showAddStationForm(false),
       targetStationIdForPort(""), selectedPortType(0), activePortPower(false), activePortPrice(false), showAddPortForm(false),
       activeCustomerSearch(false), showAddCustomerForm(false), activeCustField(0), customerStatusMsg(""),
-      customerTab(0), customerErrorMsg(""), activeTopupAmount(false), topupStatusMsg(""),
+      showTopupModal(false), topupTargetCustomerId(""), activeAdminTopup(false), adminTopupMsg(""),
+      customerTab(0), customerErrorMsg(""),
       receiptInvoiceId(""), receiptStationName(""), receiptPortId(""), receiptKWh(0.0f), receiptCost(0.0f), receiptRemainingBal(0.0f)
 {
+    // Khoi tao bo dem bo nho cho cac chuoi nhap lieu
     memset(loginUsername, 0, sizeof(loginUsername));
     memset(loginPassword, 0, sizeof(loginPassword));
     memset(newStationName, 0, sizeof(newStationName));
@@ -73,13 +89,14 @@ AppUI::AppUI(UserManager& u, StationManager& s, SessionManager& se)
     memset(newCustCarModel, 0, sizeof(newCustCarModel));
     memset(newCustBattery, 0, sizeof(newCustBattery));
     memset(newCustBalance, 0, sizeof(newCustBalance));
-    memset(topupAmountStr, 0, sizeof(topupAmountStr));
+    memset(adminTopupAmount, 0, sizeof(adminTopupAmount));
 
+    // Gia tri mac dinh tien loi khi them moi
     strcpy(newPortPower, "22");
     strcpy(newPortPrice, "3500");
     strcpy(newCustBattery, "80");
     strcpy(newCustBalance, "500000");
-    strcpy(topupAmountStr, "100000");
+    strcpy(adminTopupAmount, "100000");
 }
 
 void AppUI::Init() {
@@ -89,8 +106,9 @@ void AppUI::Init() {
 
 void AppUI::UpdateDrawFrame() {
     BeginDrawing();
-    ClearBackground((Color){ 245, 247, 250, 255 });
+    ClearBackground((Color){ 245, 247, 250, 255 }); // Mau nen xam trang trang nha
 
+    // Dieu phoi ve man hinh theo State hien tai
     switch (currentState) {
         case STATE_LOGIN:             DrawLogin(); break;
         case STATE_ADMIN_DASHBOARD:   DrawAdminDashboard(); break;
@@ -102,39 +120,45 @@ void AppUI::UpdateDrawFrame() {
         case STATE_CUSTOMER_RECEIPT:  DrawCustomerReceipt(); break;
     }
 
+    // Neu Admin dang mo hop thoai nap tien cho khach thi ve de len tren
+    if (showTopupModal) {
+        DrawAdminTopupModal();
+    }
+
     EndDrawing();
 }
 
 // =====================================================================
-// MÀN HÌNH ĐĂNG NHẬP (LOGIN)
+// 1. MAN HINH DANG NHAP (LOGIN SCREEN)
 // =====================================================================
+
 void AppUI::DrawLogin() {
     // Header Banner
     DrawRectangle(0, 0, GetScreenWidth(), 120, (Color){ 30, 58, 138, 255 });
     DrawText("EV CHARGING STATION MANAGEMENT", 240, 35, 30, WHITE);
     DrawText("HE THONG QUAN LY TRAM SAC XE DIEN (PBL2 - OOP)", 310, 75, 18, (Color){ 191, 219, 254, 255 });
 
-    // Login Card
+    // Login Card (hop dang nhap bo goc)
     DrawRectangleRounded((Rectangle){ 280, 180, 464, 430 }, 0.05f, 4, WHITE);
     DrawRectangleRoundedLines((Rectangle){ 280, 180, 464, 430 }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
     
     DrawText("DANG NHAP HE THONG", 380, 210, 22, (Color){ 15, 23, 42, 255 });
 
-    // Username input
+    // O nhap Username
     DrawText("Ten dang nhap (Username):", 330, 260, 16, (Color){ 71, 85, 105, 255 });
     if (GuiTextBox((Rectangle){ 330, 285, 364, 38 }, loginUsername, 64, loginUsernameActive)) {
         loginUsernameActive = !loginUsernameActive;
         if (loginUsernameActive) loginPasswordActive = false;
     }
 
-    // Password input
+    // O nhap Password
     DrawText("Mat khau (Password):", 330, 340, 16, (Color){ 71, 85, 105, 255 });
     if (GuiTextBox((Rectangle){ 330, 365, 364, 38 }, loginPassword, 64, loginPasswordActive)) {
         loginPasswordActive = !loginPasswordActive;
         if (loginPasswordActive) loginUsernameActive = false;
     }
 
-    // Login Button
+    // Nut Bam Dang Nhap
     if (GuiButton((Rectangle){ 330, 435, 364, 45 }, "DANG NHAP")) {
         loginUsernameActive = false;
         loginPasswordActive = false;
@@ -144,7 +168,7 @@ void AppUI::DrawLogin() {
             if (um.getLoggedInUser()->getRole() == ROLE_ADMIN) {
                 currentState = STATE_ADMIN_DASHBOARD;
             } else {
-                // Kiểm tra nếu khách này đang có phiên sạc dở dang thì chuyển thẳng vào màn hình sạc
+                // Kiem tra neu khach hang dang co phien sac do dang thi vao thang man hinh sac
                 Customer* c = (Customer*)um.getLoggedInUser();
                 if (c && sem.getActiveSession(c->getId()) != nullptr) {
                     currentState = STATE_CUSTOMER_CHARGING;
@@ -154,31 +178,32 @@ void AppUI::DrawLogin() {
             }
         } else {
             loginError = true;
-            loginErrorMsg = "Sai tai khoan hoac mat khau (hoac tai khoan bi khoa)!";
+            loginErrorMsg = "Sai tai khoan hoac mat khau!";
         }
     }
 
     if (loginError) {
-        DrawText(loginErrorMsg.c_str(), 310, 495, 15, RED);
+        DrawText(loginErrorMsg.c_str(), 360, 495, 15, RED);
     }
 
-    // Account hints
+    // Goi y tai khoan kiem thu
     DrawRectangle(310, 525, 404, 60, (Color){ 241, 245, 249, 255 });
     DrawText("Tai khoan Admin: admin / admin123", 330, 535, 14, (Color){ 100, 116, 139, 255 });
     DrawText("Tai khoan Khach: khach1 / 123", 330, 555, 14, (Color){ 100, 116, 139, 255 });
 }
 
 // =====================================================================
-// THANH ĐIỀU HƯỚNG ADMIN (SIDEBAR)
+// THANH SIDEBAR DIEU HUONG CHO ADMIN
 // =====================================================================
+
 void AppUI::DrawAdminSidebar() {
     DrawRectangle(0, 0, 220, GetScreenHeight(), (Color){ 30, 41, 59, 255 });
     
-    // Logo
+    // Logo Admin
     DrawRectangle(15, 20, 190, 50, (Color){ 15, 23, 42, 255 });
     DrawText("⚡ EVC ADMIN", 35, 32, 22, (Color){ 56, 189, 248, 255 });
 
-    // Menu Buttons
+    // Cac nut chuyen tab quan ly
     if (GuiButton((Rectangle){ 15, 100, 190, 42 }, "📊 Dashboard")) {
         currentState = STATE_ADMIN_DASHBOARD;
     }
@@ -192,7 +217,7 @@ void AppUI::DrawAdminSidebar() {
         currentState = STATE_ADMIN_INVOICES;
     }
     
-    // Logout Button
+    // Nut Dang Xuat
     if (GuiButton((Rectangle){ 15, (float)(GetScreenHeight() - 60), 190, 42 }, "🚪 DANG XUAT")) {
         um.logout();
         currentState = STATE_LOGIN;
@@ -205,8 +230,9 @@ void AppUI::DrawAdminSidebar() {
 }
 
 // =====================================================================
-// ADMIN DASHBOARD
+// 2. ADMIN DASHBOARD (THONG KE TONG QUAN)
 // =====================================================================
+
 void AppUI::DrawAdminDashboard() {
     DrawAdminSidebar();
 
@@ -221,28 +247,28 @@ void AppUI::DrawAdminDashboard() {
     float revenue = sem.getTotalRevenue();
     float energy = sem.getTotalEnergyConsumed();
 
-    // 4 Stat Cards
-    // Card 1: Tổng trạm
+    // 4 The Thong ke trang thai cong sac
+    // The 1: Tong so tram
     DrawRectangleRounded((Rectangle){ (float)startX, 75, 175, 100 }, 0.1f, 4, (Color){ 224, 242, 254, 255 });
     DrawText("Tong so tram", startX + 15, 90, 15, (Color){ 3, 105, 161, 255 });
     DrawText(TextFormat("%d", totalStations), startX + 15, 115, 36, (Color){ 2, 132, 199, 255 });
 
-    // Card 2: Cổng khả dụng (Available)
+    // The 2: Cong trong kha dung (Available)
     DrawRectangleRounded((Rectangle){ (float)startX + 190, 75, 175, 100 }, 0.1f, 4, (Color){ 220, 252, 231, 255 });
     DrawText("Cong trong (Available)", startX + 205, 90, 15, (Color){ 21, 128, 61, 255 });
     DrawText(TextFormat("%d / %d", avail, totalPorts), startX + 205, 115, 36, (Color){ 22, 163, 74, 255 });
 
-    // Card 3: Cổng đang sạc (Occupied)
+    // The 3: Cong dang duoc sac (Occupied)
     DrawRectangleRounded((Rectangle){ (float)startX + 380, 75, 175, 100 }, 0.1f, 4, (Color){ 254, 243, 199, 255 });
     DrawText("Dang sac (Occupied)", startX + 395, 90, 15, (Color){ 180, 83, 9, 255 });
     DrawText(TextFormat("%d", occ), startX + 395, 115, 36, (Color){ 217, 119, 6, 255 });
 
-    // Card 4: Cổng bảo trì (Maintenance)
+    // The 4: Cong dang bao tri (Maintenance)
     DrawRectangleRounded((Rectangle){ (float)startX + 570, 75, 175, 100 }, 0.1f, 4, (Color){ 254, 226, 226, 255 });
     DrawText("Bao tri (Maintenance)", startX + 585, 90, 15, (Color){ 185, 28, 28, 255 });
     DrawText(TextFormat("%d", maint), startX + 585, 115, 36, (Color){ 220, 38, 38, 255 });
 
-    // Revenue & Energy Banner
+    // Khung Doanh thu & Dien nang tieu thu
     DrawRectangleRounded((Rectangle){ (float)startX, 195, 365, 90 }, 0.1f, 4, (Color){ 238, 242, 255, 255 });
     DrawText("Tong doanh thu he thong", startX + 20, 210, 16, (Color){ 67, 56, 202, 255 });
     DrawText(formatMoney(revenue).c_str(), startX + 20, 235, 26, (Color){ 79, 70, 229, 255 });
@@ -251,7 +277,7 @@ void AppUI::DrawAdminDashboard() {
     DrawText("Tong dien nang tieu thu", startX + 400, 210, 16, (Color){ 126, 34, 206, 255 });
     DrawText(TextFormat("%.2f kWh", energy), startX + 400, 235, 26, (Color){ 147, 51, 234, 255 });
 
-    // Danh sách các phiên sạc đang hoạt động (Live Sessions)
+    // Bang danh sach cac phien sac dang truc tiep hoat dong (Live Sessions)
     DrawText("CAC PHIEN SAC DANG DIEN RA (LIVE SESSIONS)", startX, 310, 18, (Color){ 30, 41, 59, 255 });
     DrawRectangle(startX, 340, 745, 380, WHITE);
     DrawRectangleLines(startX, 340, 745, 380, (Color){ 203, 213, 225, 255 });
@@ -266,18 +292,18 @@ void AppUI::DrawAdminDashboard() {
     int py = 385;
     int liveCount = 0;
     for (auto& s : sem.getSessions()) {
-        if (s.isActive) {
+        if (s.getIsActive()) {
             liveCount++;
-            Customer* c = um.getCustomerById(s.customerId);
-            string custName = c ? c->getName() : s.customerId;
-            ChargingStation* st = sm.getStationById(s.stationId);
-            string stName = st ? st->name : s.stationId;
+            Customer* c = um.getCustomerById(s.getCustomerId());
+            string custName = c ? c->getName() : s.getCustomerId();
+            ChargingStation* st = sm.getStationById(s.getStationId());
+            string stName = st ? st->getName() : s.getStationId();
 
-            DrawText(s.sessionId.c_str(), startX + 15, py, 14, (Color){ 15, 23, 42, 255 });
+            DrawText(s.getSessionId().c_str(), startX + 15, py, 14, (Color){ 15, 23, 42, 255 });
             DrawText(custName.c_str(), startX + 160, py, 14, (Color){ 15, 23, 42, 255 });
             DrawText(stName.c_str(), startX + 310, py, 14, (Color){ 15, 23, 42, 255 });
-            DrawText(s.portId.c_str(), startX + 460, py, 14, (Color){ 217, 119, 6, 255 });
-            DrawText(formatTime(s.startTime).c_str(), startX + 540, py, 14, (Color){ 100, 116, 139, 255 });
+            DrawText(s.getPortId().c_str(), startX + 460, py, 14, (Color){ 217, 119, 6, 255 });
+            DrawText(formatTime(s.getStartTime()).c_str(), startX + 540, py, 14, (Color){ 100, 116, 139, 255 });
 
             py += 30;
             if (py > 690) break;
@@ -289,15 +315,16 @@ void AppUI::DrawAdminDashboard() {
 }
 
 // =====================================================================
-// ADMIN: QUẢN LÝ TRẠM SẠC & CỔNG SẠC
+// 3. ADMIN: QUAN LY TRAM SAC & CONG SAC
 // =====================================================================
+
 void AppUI::DrawAdminStations() {
     DrawAdminSidebar();
 
     int startX = 245;
     DrawText("QUAN LY TRAM SAC & CONG SAC", startX, 25, 24, (Color){ 15, 23, 42, 255 });
 
-    // Nút mở form Thêm Trạm
+    // Nut Mo Form Them Tram Moi
     if (GuiButton((Rectangle){ (float)startX + 560, 20, 185, 35 }, "+ THEM TRAM SAC MOI")) {
         showAddStationForm = !showAddStationForm;
         showAddPortForm = false;
@@ -333,7 +360,7 @@ void AppUI::DrawAdminStations() {
                 string newId = sm.generateNextStationId();
                 ChargingStation st(newId, newStationName, newStationAddress);
                 sm.addStation(st);
-                autoSave();
+                autoSave(); // Luu ngay lap tuc ra tep CSV
                 stationStatusMsg = "Them tram sac " + newId + " thanh cong!";
                 memset(newStationName, 0, sizeof(newStationName));
                 memset(newStationAddress, 0, sizeof(newStationAddress));
@@ -377,7 +404,7 @@ void AppUI::DrawAdminStations() {
             string portId = sm.generateNextPortId(targetStationIdForPort);
             ChargingPort cp(portId, (PortType)selectedPortType, pwr, prc, AVAILABLE, "");
             sm.addPortToStation(targetStationIdForPort, cp);
-            autoSave();
+            autoSave(); // Luu ngay lap tuc ra ports.csv de nho trang thai cho lan sau
             stationStatusMsg = "Them cong " + portId + " vao tram " + targetStationIdForPort + " thanh cong!";
             showAddPortForm = false;
         }
@@ -386,32 +413,32 @@ void AppUI::DrawAdminStations() {
         }
     }
 
-    // DANH SÁCH CÁC TRẠM SẠC VÀ CÁC CỔNG
+    // DANH SÁCH BẢNG CÁC TRẠM SẠC VÀ CÁC CỔNG
     int listStartY = (showAddStationForm || showAddPortForm) ? 225 : 85;
     int y = listStartY;
 
     for (auto& st : sm.getStations()) {
         if (y > 710) break;
-        // Hộp thông tin trạm
+        // Hop tieu de tram sac
         DrawRectangle(startX, y, 745, 36, (Color){ 226, 232, 240, 255 });
         DrawRectangleLines(startX, y, 745, 36, (Color){ 203, 213, 225, 255 });
 
-        DrawText(TextFormat("[%s] %s", st.stationId.c_str(), st.name.c_str()), startX + 15, y + 9, 16, (Color){ 15, 23, 42, 255 });
-        DrawText(TextFormat("Dia chi: %s", st.address.c_str()), startX + 220, y + 10, 14, (Color){ 71, 85, 105, 255 });
+        DrawText(TextFormat("[%s] %s", st.getStationId().c_str(), st.getName().c_str()), startX + 15, y + 9, 16, (Color){ 15, 23, 42, 255 });
+        DrawText(TextFormat("Dia chi: %s", st.getAddress().c_str()), startX + 220, y + 10, 14, (Color){ 71, 85, 105, 255 });
 
-        // Nút thêm cổng cho trạm này
+        // Nut Them cong sac vao tram
         if (GuiButton((Rectangle){ (float)startX + 520, (float)y + 5, 105, 26 }, "+ Them Cong")) {
-            targetStationIdForPort = st.stationId;
+            targetStationIdForPort = st.getStationId();
             showAddPortForm = true;
             showAddStationForm = false;
             stationStatusMsg = "";
         }
 
-        // Nút xóa trạm (chỉ xóa khi không có cổng nào đang sạc)
+        // Nut Xoa tram (Chi xoa duoc khi khong co cong nao dang sac)
         if (GuiButton((Rectangle){ (float)startX + 635, (float)y + 5, 95, 26 }, "Xoa Tram")) {
-            if (sm.deleteStation(st.stationId)) {
+            if (sm.deleteStation(st.getStationId())) {
                 autoSave();
-                stationStatusMsg = "Xoa tram " + st.stationId + " thanh cong!";
+                stationStatusMsg = "Xoa tram " + st.getStationId() + " thanh cong!";
                 break;
             } else {
                 stationStatusMsg = "Khong the xoa tram vi dang co cong dang duoc sac!";
@@ -419,33 +446,33 @@ void AppUI::DrawAdminStations() {
         }
         y += 42;
 
-        // Danh sách các cổng của trạm
-        if (st.ports.empty()) {
+        // Danh sach cac cong sac cua tram
+        if (st.getPorts().empty()) {
             DrawText("  (Tram chua co cong sac nao. Nhan '+ Them Cong' de bo sung)", startX + 25, y + 5, 14, (Color){ 148, 163, 184, 255 });
             y += 30;
         } else {
-            for (auto& p : st.ports) {
+            for (auto& p : st.getPorts()) {
                 if (y > 720) break;
                 DrawRectangle(startX + 20, y, 725, 32, WHITE);
                 DrawRectangleLines(startX + 20, y, 725, 32, (Color){ 241, 245, 249, 255 });
 
-                string typeStr = (p.type == AC_STANDARD) ? "AC Standard" : ((p.type == DC_FAST) ? "DC Fast" : "DC Supercharge");
-                string statusStr = (p.status == AVAILABLE) ? "TRONG (Available)" : ((p.status == OCCUPIED) ? "DANG SAC" : "BAO TRI (Maintenance)");
-                Color stColor = (p.status == AVAILABLE) ? (Color){ 22, 163, 74, 255 } : ((p.status == OCCUPIED) ? (Color){ 217, 119, 6, 255 } : (Color){ 220, 38, 38, 255 });
+                string typeStr = (p.getType() == AC_STANDARD) ? "AC Standard" : ((p.getType() == DC_FAST) ? "DC Fast" : "DC Supercharge");
+                string statusStr = (p.getStatus() == AVAILABLE) ? "TRONG (Available)" : ((p.getStatus() == OCCUPIED) ? "DANG SAC" : "BAO TRI (Maintenance)");
+                Color stColor = (p.getStatus() == AVAILABLE) ? (Color){ 22, 163, 74, 255 } : ((p.getStatus() == OCCUPIED) ? (Color){ 217, 119, 6, 255 } : (Color){ 220, 38, 38, 255 });
 
-                DrawText(TextFormat("Cong %s: %s | %.0f kW | %.0f d/kWh", p.portId.c_str(), typeStr.c_str(), p.powerKW, p.pricePerKWh), startX + 35, y + 8, 14, (Color){ 30, 41, 59, 255 });
+                DrawText(TextFormat("Cong %s: %s | %.0f kW | %.0f d/kWh", p.getPortId().c_str(), typeStr.c_str(), p.getPowerKW(), p.getPricePerKWh()), startX + 35, y + 8, 14, (Color){ 30, 41, 59, 255 });
                 DrawText(statusStr.c_str(), startX + 380, y + 8, 14, stColor);
 
-                // Nút chuyển trạng thái Available <-> Maintenance
-                if (p.status != OCCUPIED) {
-                    const char* btnLabel = (p.status == AVAILABLE) ? "Dat Bao Tri" : "Mo Hoat Dong";
+                // Nut Chuyen doi trang thai Bao tri / Hoat dong
+                if (p.getStatus() != OCCUPIED) {
+                    const char* btnLabel = (p.getStatus() == AVAILABLE) ? "Dat Bao Tri" : "Mo Hoat Dong";
                     if (GuiButton((Rectangle){ (float)startX + 550, (float)y + 3, 100, 24 }, btnLabel)) {
-                        PortStatus newSt = (p.status == AVAILABLE) ? MAINTENANCE : AVAILABLE;
-                        sm.updatePortStatus(st.stationId, p.portId, newSt);
+                        PortStatus newSt = (p.getStatus() == AVAILABLE) ? MAINTENANCE : AVAILABLE;
+                        sm.updatePortStatus(st.getStationId(), p.getPortId(), newSt);
                         autoSave();
                     }
                     if (GuiButton((Rectangle){ (float)startX + 660, (float)y + 3, 70, 24 }, "Xoa")) {
-                        sm.deletePort(st.stationId, p.portId);
+                        sm.deletePort(st.getStationId(), p.getPortId());
                         autoSave();
                         break;
                     }
@@ -460,21 +487,22 @@ void AppUI::DrawAdminStations() {
 }
 
 // =====================================================================
-// ADMIN: QUẢN LÝ KHÁCH HÀNG & TÀI KHOẢN
+// 4. ADMIN: QUAN LY KHACH HANG & NAP TIEN
 // =====================================================================
+
 void AppUI::DrawAdminCustomers() {
     DrawAdminSidebar();
 
     int startX = 245;
     DrawText("QUAN LY KHACH HANG & TAI KHOAN", startX, 25, 24, (Color){ 15, 23, 42, 255 });
 
-    // Thanh tìm kiếm
+    // Thanh Tim kiem
     DrawText("Tim kiem (Ten / SDT / Bien so):", startX, 68, 14, DARKGRAY);
     if (GuiTextBox((Rectangle){ (float)startX + 225, 62, 280, 30 }, customerSearch, 128, activeCustomerSearch)) {
         activeCustomerSearch = !activeCustomerSearch;
     }
 
-    // Nút mở form Thêm Khách Hàng
+    // Nut Mo Form Them Khach Hang Moi
     if (GuiButton((Rectangle){ (float)startX + 520, 60, 225, 34 }, "+ THEM TAI KHOAN KHACH")) {
         showAddCustomerForm = !showAddCustomerForm;
         customerStatusMsg = "";
@@ -490,7 +518,7 @@ void AppUI::DrawAdminCustomers() {
         DrawRectangleLines(startX, 118, 745, 175, (Color){ 148, 163, 184, 255 });
         DrawText("THONG TIN TAI KHOAN KHACH HANG MOI:", startX + 15, 128, 15, (Color){ 30, 41, 59, 255 });
 
-        // Hàng 1: User & Pass
+        // Hang 1: Username, Password, Ho Ten
         DrawText("Username:", startX + 15, 155, 14, DARKGRAY);
         if (GuiTextBox((Rectangle){ (float)startX + 95, 150, 120, 26 }, newCustUsername, 64, activeCustField == 1)) {
             activeCustField = (activeCustField == 1) ? 0 : 1;
@@ -506,7 +534,7 @@ void AppUI::DrawAdminCustomers() {
             activeCustField = (activeCustField == 3) ? 0 : 3;
         }
 
-        // Hàng 2: SĐT, Biển số, Dòng xe
+        // Hang 2: SDT, Bien so, Dong xe, Dung luong pin
         DrawText("SDT:", startX + 15, 195, 14, DARKGRAY);
         if (GuiTextBox((Rectangle){ (float)startX + 95, 190, 120, 26 }, newCustPhone, 32, activeCustField == 4)) {
             activeCustField = (activeCustField == 4) ? 0 : 4;
@@ -527,7 +555,7 @@ void AppUI::DrawAdminCustomers() {
             activeCustField = (activeCustField == 7) ? 0 : 7;
         }
 
-        // Hàng 3: Số dư khởi tạo & Nút
+        // Hang 3: So du vi khoi tao & Nut bam
         DrawText("So du ban dau (VND):", startX + 15, 235, 14, DARKGRAY);
         if (GuiTextBox((Rectangle){ (float)startX + 165, 230, 140, 26 }, newCustBalance, 32, activeCustField == 8)) {
             activeCustField = (activeCustField == 8) ? 0 : 8;
@@ -537,7 +565,7 @@ void AppUI::DrawAdminCustomers() {
             if (strlen(newCustUsername) == 0 || strlen(newCustPassword) == 0 || strlen(newCustName) == 0) {
                 customerStatusMsg = "Vui long nhap it nhat Username, Password va Ho Ten!";
             } else if (um.usernameExists(newCustUsername)) {
-                customerStatusMsg = "Ten dang nhap nay da ton tai!";
+                customerStatusMsg = "Ten dang nhap nay da ton tai trong he thong!";
             } else {
                 string nextId = um.generateNextCustomerId();
                 float bat = (float)atof(newCustBattery);
@@ -546,9 +574,9 @@ void AppUI::DrawAdminCustomers() {
                 if (bal < 0) bal = 0.0f;
 
                 Customer c(nextId, newCustUsername, newCustPassword, newCustName,
-                           newCustPhone, newCustPlate, newCustCarModel, bat, bal, false);
+                           newCustPhone, newCustPlate, newCustCarModel, bat, bal);
                 um.addCustomer(c);
-                autoSave();
+                autoSave(); // Luu ngay vao customers.csv
                 customerStatusMsg = "Tao tai khoan " + string(newCustUsername) + " (Ma: " + nextId + ") thanh cong!";
                 showAddCustomerForm = false;
                 memset(newCustUsername, 0, sizeof(newCustUsername));
@@ -566,21 +594,21 @@ void AppUI::DrawAdminCustomers() {
     DrawRectangle(startX, tableStartY, 745, 430, WHITE);
     DrawRectangleLines(startX, tableStartY, 745, 430, (Color){ 203, 213, 225, 255 });
 
-    // Table Header
+    // Header Bang
     DrawRectangle(startX, tableStartY, 745, 34, (Color){ 241, 245, 249, 255 });
     DrawText("Ma KH", startX + 10, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
     DrawText("Ho Ten", startX + 70, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
     DrawText("SDT", startX + 210, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
     DrawText("Bien So", startX + 310, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
     DrawText("Dong Xe", startX + 410, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
-    DrawText("So Du (VND)", startX + 490, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
+    DrawText("So Du Vi", startX + 490, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
     DrawText("Thao Tac", startX + 635, tableStartY + 9, 14, (Color){ 71, 85, 105, 255 });
 
     string kw = toLower(customerSearch);
     int rowY = tableStartY + 42;
     for (auto& c : um.getCustomers()) {
         if (rowY > 730) break;
-        // Filter by keyword
+        // Bo loc tim kiem theo Tu khoa
         if (!kw.empty()) {
             if (toLower(c.getName()).find(kw) == string::npos &&
                 toLower(c.getPhone()).find(kw) == string::npos &&
@@ -596,11 +624,12 @@ void AppUI::DrawAdminCustomers() {
         DrawText(c.getCarModel().c_str(), startX + 410, rowY, 14, (Color){ 71, 85, 105, 255 });
         DrawText(formatMoney(c.getBalance()).c_str(), startX + 490, rowY, 14, (Color){ 22, 163, 74, 255 });
 
-        // Nút Khóa / Mở Khóa
-        const char* lockLabel = c.getIsLocked() ? "Mo Khoa" : "KHOA";
-        if (GuiButton((Rectangle){ (float)startX + 635, (float)rowY - 3, 90, 24 }, lockLabel)) {
-            um.toggleCustomerLock(c.getId());
-            autoSave();
+        // Nut Nạp tiền cho khách (Da thay the nut Khoa tai khoan theo yeu cau)
+        if (GuiButton((Rectangle){ (float)startX + 635, (float)rowY - 3, 95, 24 }, "+ Nap Tien")) {
+            showTopupModal = true;
+            topupTargetCustomerId = c.getId();
+            adminTopupMsg = "";
+            strcpy(adminTopupAmount, "100000");
         }
 
         rowY += 32;
@@ -608,8 +637,91 @@ void AppUI::DrawAdminCustomers() {
 }
 
 // =====================================================================
-// ADMIN: HÓA ĐƠN & PHIÊN SẠC
+// MODAL HOP THOAI NAP TIEN CHO KHACH HANG (ADMIN TOPUP MODAL)
 // =====================================================================
+
+void AppUI::DrawAdminTopupModal() {
+    // Lop phu mo toi toan man hinh
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){ 0, 0, 0, 160 });
+
+    Customer* c = um.getCustomerById(topupTargetCustomerId);
+    if (!c) {
+        showTopupModal = false;
+        return;
+    }
+
+    // Khung modal trung tam
+    int modalX = 280;
+    int modalY = 180;
+    int modalW = 480;
+    int modalH = 380;
+
+    DrawRectangleRounded((Rectangle){ (float)modalX, (float)modalY, (float)modalW, (float)modalH }, 0.05f, 4, WHITE);
+    DrawRectangleRoundedLines((Rectangle){ (float)modalX, (float)modalY, (float)modalW, (float)modalH }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
+
+    // Tieu de
+    DrawRectangleRounded((Rectangle){ (float)modalX, (float)modalY, (float)modalW, 55 }, 0.05f, 4, (Color){ 30, 58, 138, 255 });
+    DrawText("💳 NAP TIEN CHO KHACH HANG", modalX + 90, modalY + 18, 20, WHITE);
+
+    // Thong tin khach hang
+    DrawText(TextFormat("Khach hang: %s  (Ma: %s)", c->getName().c_str(), c->getId().c_str()), modalX + 30, modalY + 75, 16, (Color){ 15, 23, 42, 255 });
+    DrawText(TextFormat("So du hien tai: %s", formatMoney(c->getBalance()).c_str()), modalX + 30, modalY + 105, 16, (Color){ 22, 163, 74, 255 });
+
+    // Cac nut chon nhanh menh gia
+    DrawText("Chon nhanh menh gia:", modalX + 30, modalY + 140, 14, DARKGRAY);
+    if (GuiButton((Rectangle){ (float)modalX + 30, (float)modalY + 165, 95, 35 }, "+ 50k")) {
+        um.topupCustomerBalance(c->getId(), 50000.0f);
+        autoSave();
+        adminTopupMsg = "Nap thanh cong 50,000 VND!";
+    }
+    if (GuiButton((Rectangle){ (float)modalX + 135, (float)modalY + 165, 95, 35 }, "+ 100k")) {
+        um.topupCustomerBalance(c->getId(), 100000.0f);
+        autoSave();
+        adminTopupMsg = "Nap thanh cong 100,000 VND!";
+    }
+    if (GuiButton((Rectangle){ (float)modalX + 240, (float)modalY + 165, 95, 35 }, "+ 200k")) {
+        um.topupCustomerBalance(c->getId(), 200000.0f);
+        autoSave();
+        adminTopupMsg = "Nap thanh cong 200,000 VND!";
+    }
+    if (GuiButton((Rectangle){ (float)modalX + 345, (float)modalY + 165, 105, 35 }, "+ 500k")) {
+        um.topupCustomerBalance(c->getId(), 500000.0f);
+        autoSave();
+        adminTopupMsg = "Nap thanh cong 500,000 VND!";
+    }
+
+    // Nhap so tien tuy y
+    DrawText("Hoac nhap so tien tuy y (VND):", modalX + 30, modalY + 220, 14, DARKGRAY);
+    if (GuiTextBox((Rectangle){ (float)modalX + 30, (float)modalY + 245, 250, 35 }, adminTopupAmount, 32, activeAdminTopup)) {
+        activeAdminTopup = !activeAdminTopup;
+    }
+
+    if (GuiButton((Rectangle){ (float)modalX + 295, (float)modalY + 245, 155, 35 }, "Xac Nhan Nap")) {
+        float val = (float)atof(adminTopupAmount);
+        if (val > 0) {
+            um.topupCustomerBalance(c->getId(), val);
+            autoSave();
+            adminTopupMsg = "Nap thanh cong " + formatMoney(val) + "!";
+        } else {
+            adminTopupMsg = "Vui long nhap so tien hop le!";
+        }
+    }
+
+    if (!adminTopupMsg.empty()) {
+        DrawText(adminTopupMsg.c_str(), modalX + 30, modalY + 295, 15, (adminTopupMsg.find("thanh cong") != string::npos) ? GREEN : RED);
+    }
+
+    // Nut Dong Modal
+    if (GuiButton((Rectangle){ (float)modalX + 160, (float)modalY + 325, 160, 38 }, "Hoan Tat / Dong")) {
+        showTopupModal = false;
+        adminTopupMsg = "";
+    }
+}
+
+// =====================================================================
+// 5. ADMIN: LICH SU HOA DON TOAN HE THONG
+// =====================================================================
+
 void AppUI::DrawAdminInvoices() {
     DrawAdminSidebar();
 
@@ -635,11 +747,11 @@ void AppUI::DrawAdminInvoices() {
             auto& inv = invs[i];
             if (y > 700) break;
 
-            DrawText(inv.invoiceId.c_str(), startX + 20, y, 14, (Color){ 15, 23, 42, 255 });
-            DrawText(inv.sessionId.c_str(), startX + 180, y, 14, (Color){ 100, 116, 139, 255 });
-            DrawText(inv.customerId.c_str(), startX + 330, y, 14, (Color){ 15, 23, 42, 255 });
-            DrawText(formatMoney(inv.totalAmount).c_str(), startX + 470, y, 14, (Color){ 22, 163, 74, 255 });
-            DrawText(formatTime(inv.date).c_str(), startX + 610, y, 14, (Color){ 100, 116, 139, 255 });
+            DrawText(inv.getInvoiceId().c_str(), startX + 20, y, 14, (Color){ 15, 23, 42, 255 });
+            DrawText(inv.getSessionId().c_str(), startX + 180, y, 14, (Color){ 100, 116, 139, 255 });
+            DrawText(inv.getCustomerId().c_str(), startX + 330, y, 14, (Color){ 15, 23, 42, 255 });
+            DrawText(formatMoney(inv.getTotalAmount()).c_str(), startX + 470, y, 14, (Color){ 22, 163, 74, 255 });
+            DrawText(formatTime(inv.getDate()).c_str(), startX + 610, y, 14, (Color){ 100, 116, 139, 255 });
 
             y += 30;
         }
@@ -647,24 +759,24 @@ void AppUI::DrawAdminInvoices() {
 }
 
 // =====================================================================
-// GIAO DIỆN KHÁCH HÀNG (CUSTOMER MENU)
+// 6. GIAO DIEN MENU KHACH HANG (CUSTOMER MENU)
 // =====================================================================
+
 void AppUI::DrawCustomerMenu() {
     Customer* c = (Customer*)um.getLoggedInUser();
     if (!c) return;
 
-    // Header hiển thị: ID, Tên, Số dư ở góc trên cùng
+    // Header hien thi: ID, Ten, Xe, Bien so va So du o goc tren cung
     DrawRectangle(0, 0, GetScreenWidth(), 70, (Color){ 30, 58, 138, 255 });
     DrawText("⚡ EVC CHARGING", 25, 22, 24, (Color){ 56, 189, 248, 255 });
 
-    // Hiển thị thông tin người dùng góc trên
-    DrawText(TextFormat("👤 %s  |  Ma KH: %s  |  Xe: %s (%s)", c->getName().c_str(), c->getId().c_str(), c->getCarModel().c_str(), c->getLicensePlate().c_str()), 220, 26, 15, WHITE);
+    DrawText(TextFormat("👤 %s  |  Ma: %s  |  Xe: %s (%s)", c->getName().c_str(), c->getId().c_str(), c->getCarModel().c_str(), c->getLicensePlate().c_str()), 220, 26, 15, WHITE);
 
-    // Số dư tài khoản nổi bật
+    // O hien thi so du tai khoan noi bat
     DrawRectangleRounded((Rectangle){ 700, 15, 210, 40 }, 0.2f, 4, (Color){ 22, 101, 52, 255 });
     DrawText(TextFormat("So du: %s", formatMoney(c->getBalance()).c_str()), 710, 27, 15, (Color){ 187, 247, 208, 255 });
 
-    // Nút Đăng xuất
+    // Nut Dang Xuat
     if (GuiButton((Rectangle){ 925, 15, 85, 40 }, "Dang Xuat")) {
         um.logout();
         currentState = STATE_LOGIN;
@@ -676,22 +788,18 @@ void AppUI::DrawCustomerMenu() {
         return;
     }
 
-    // Tabs chuyển đổi màn hình con cho khách
+    // Tabs chuyen doi: CHI CON 2 TAB (Da bo tab nap tien o khach theo yeu cau)
     DrawRectangle(0, 70, GetScreenWidth(), 45, (Color){ 241, 245, 249, 255 });
-    if (GuiButton((Rectangle){ 25, 76, 220, 33 }, customerTab == 0 ? "[ 🔌 TRA CUU & SAC DIEN ]" : "🔌 Tra Cuu & Sac Dien")) {
+    if (GuiButton((Rectangle){ 25, 76, 260, 33 }, customerTab == 0 ? "[ 🔌 TRA CUU & SAC DIEN ]" : "🔌 Tra Cuu & Sac Dien")) {
         customerTab = 0;
         customerErrorMsg = "";
     }
-    if (GuiButton((Rectangle){ 260, 76, 190, 33 }, customerTab == 1 ? "[ 💳 NAP TIEN VAO VI ]" : "💳 Nap Tien Vao Vi")) {
+    if (GuiButton((Rectangle){ 300, 76, 260, 33 }, customerTab == 1 ? "[ 📜 LICH SU HOA DON ]" : "📜 Lich Su Hoa Don")) {
         customerTab = 1;
         customerErrorMsg = "";
     }
-    if (GuiButton((Rectangle){ 465, 76, 210, 33 }, customerTab == 2 ? "[ 📜 LICH SU HOA DON ]" : "📜 Lich Su Hoa Don")) {
-        customerTab = 2;
-        customerErrorMsg = "";
-    }
 
-    // Thông báo lỗi nếu có
+    // Thong bao loi neu co
     if (!customerErrorMsg.empty()) {
         DrawRectangle(25, 120, 974, 30, (Color){ 254, 226, 226, 255 });
         DrawText(customerErrorMsg.c_str(), 40, 127, 15, RED);
@@ -710,42 +818,42 @@ void AppUI::DrawCustomerMenu() {
             DrawRectangle(25, y, 974, 36, (Color){ 226, 232, 240, 255 });
             DrawRectangleLines(25, y, 974, 36, (Color){ 203, 213, 225, 255 });
 
-            DrawText(TextFormat("📍 Tram: %s  -  Dia chi: %s", st.name.c_str(), st.address.c_str()), 40, y + 9, 16, (Color){ 15, 23, 42, 255 });
+            DrawText(TextFormat("📍 Tram: %s  -  Dia chi: %s", st.getName().c_str(), st.getAddress().c_str()), 40, y + 9, 16, (Color){ 15, 23, 42, 255 });
             y += 42;
 
-            if (st.ports.empty()) {
+            if (st.getPorts().empty()) {
                 DrawText("  (Tram hien chua co cong sac nao)", 50, y + 5, 14, DARKGRAY);
                 y += 28;
             } else {
-                for (auto& p : st.ports) {
+                for (auto& p : st.getPorts()) {
                     if (y > 720) break;
                     DrawRectangle(45, y, 940, 36, WHITE);
                     DrawRectangleLines(45, y, 940, 36, (Color){ 241, 245, 249, 255 });
 
-                    string typeStr = (p.type == AC_STANDARD) ? "AC Standard" : ((p.type == DC_FAST) ? "DC Fast" : "DC Supercharge");
-                    string stStr = (p.status == AVAILABLE) ? "TRONG (Available)" : ((p.status == OCCUPIED) ? "DANG SAC" : "BAO TRI (Maintenance)");
-                    Color stColor = (p.status == AVAILABLE) ? (Color){ 22, 163, 74, 255 } : ((p.status == OCCUPIED) ? (Color){ 217, 119, 6, 255 } : (Color){ 220, 38, 38, 255 });
+                    string typeStr = (p.getType() == AC_STANDARD) ? "AC Standard" : ((p.getType() == DC_FAST) ? "DC Fast" : "DC Supercharge");
+                    string stStr = (p.getStatus() == AVAILABLE) ? "TRONG (Available)" : ((p.getStatus() == OCCUPIED) ? "DANG SAC" : "BAO TRI (Maintenance)");
+                    Color stColor = (p.getStatus() == AVAILABLE) ? (Color){ 22, 163, 74, 255 } : ((p.getStatus() == OCCUPIED) ? (Color){ 217, 119, 6, 255 } : (Color){ 220, 38, 38, 255 });
 
-                    DrawText(TextFormat("Trụ %s: %s (%.0f kW)  -  Don gia: %.0f d/kWh", p.portId.c_str(), typeStr.c_str(), p.powerKW, p.pricePerKWh), 60, y + 10, 14, (Color){ 15, 23, 42, 255 });
+                    DrawText(TextFormat("Tru %s: %s (%.0f kW)  -  Don gia: %.0f d/kWh", p.getPortId().c_str(), typeStr.c_str(), p.getPowerKW(), p.getPricePerKWh()), 60, y + 10, 14, (Color){ 15, 23, 42, 255 });
                     DrawText(stStr.c_str(), 520, y + 10, 14, stColor);
 
-                    // Nút Bắt Đầu Sạc (Chỉ hiện khi cổng Available)
-                    if (p.status == AVAILABLE) {
+                    // Nut Bat Dau Sac (Chi kha dung khi cong AVAILABLE)
+                    if (p.getStatus() == AVAILABLE) {
                         if (GuiButton((Rectangle){ 800, (float)y + 4, 160, 28 }, "BAT DAU SAC")) {
-                            // 1. Kiểm tra số dư tài khoản
+                            // 1. Kiem tra so du tai khoan
                             if (c->getBalance() < 20000.0f) {
-                                customerErrorMsg = "So du tai khoan khong du (Toi thieu 20.000 VND de bat dau sac)! Vui long qua tab Nap Tien.";
+                                customerErrorMsg = "So du tai khoan khong du (Toi thieu 20.000 VND de bat dau sac)! Vui long lien he Admin de nap tien.";
                             } else {
-                                // 2. Khởi tạo phiên sạc
-                                if (sem.startSession(c->getId(), st.stationId, p.portId, sm)) {
+                                // 2. Khoi tao phien sac
+                                if (sem.startSession(c->getId(), st.getStationId(), p.getPortId(), sm)) {
                                     customerErrorMsg = "";
-                                    autoSave();
+                                    autoSave(); // Luu ngay trang thai dang sac
                                     currentState = STATE_CUSTOMER_CHARGING;
                                     return;
                                 }
                             }
                         }
-                    } else if (p.status == OCCUPIED) {
+                    } else if (p.getStatus() == OCCUPIED) {
                         DrawText("(Dang co xe sac)", 820, y + 10, 13, (Color){ 217, 119, 6, 255 });
                     } else {
                         DrawText("(Tam ngung bao tri)", 820, y + 10, 13, (Color){ 220, 38, 38, 255 });
@@ -759,65 +867,9 @@ void AppUI::DrawCustomerMenu() {
     }
 
     // -------------------------------------------------------------
-    // TAB 1: NẠP TIỀN VÀO VÍ
+    // TAB 1: LỊCH SỬ HÓA ĐƠN CỦA KHÁCH HÀNG
     // -------------------------------------------------------------
     else if (customerTab == 1) {
-        DrawRectangle(25, 140, 974, 550, WHITE);
-        DrawRectangleLines(25, 140, 974, 550, (Color){ 203, 213, 225, 255 });
-
-        DrawText("NAP TIEN VAO TAI KHOAN TRU SAC", 320, 170, 22, (Color){ 30, 41, 59, 255 });
-
-        DrawText("So du hien tai cua ban:", 330, 220, 16, DARKGRAY);
-        DrawText(formatMoney(c->getBalance()).c_str(), 520, 215, 24, (Color){ 22, 163, 74, 255 });
-
-        DrawText("Chon nhanh menh gia nap:", 330, 275, 16, (Color){ 71, 85, 105, 255 });
-        if (GuiButton((Rectangle){ 330, 310, 150, 45 }, "+ 50.000 VND")) {
-            c->addBalance(50000.0f);
-            autoSave();
-            topupStatusMsg = "Nap thanh cong 50,000 VND!";
-        }
-        if (GuiButton((Rectangle){ 500, 310, 150, 45 }, "+ 100.000 VND")) {
-            c->addBalance(100000.0f);
-            autoSave();
-            topupStatusMsg = "Nap thanh cong 100,000 VND!";
-        }
-        if (GuiButton((Rectangle){ 330, 370, 150, 45 }, "+ 200.000 VND")) {
-            c->addBalance(200000.0f);
-            autoSave();
-            topupStatusMsg = "Nap thanh cong 200,000 VND!";
-        }
-        if (GuiButton((Rectangle){ 500, 370, 150, 45 }, "+ 500.000 VND")) {
-            c->addBalance(500000.0f);
-            autoSave();
-            topupStatusMsg = "Nap thanh cong 500,000 VND!";
-        }
-
-        // Nhập số tiền tùy ý
-        DrawText("Hoac nhap so tien tuy y (VND):", 330, 445, 16, DARKGRAY);
-        if (GuiTextBox((Rectangle){ 330, 475, 200, 38 }, topupAmountStr, 32, activeTopupAmount)) {
-            activeTopupAmount = !activeTopupAmount;
-        }
-
-        if (GuiButton((Rectangle){ 545, 475, 130, 38 }, "Xac Nhan Nap")) {
-            float val = (float)atof(topupAmountStr);
-            if (val > 0) {
-                c->addBalance(val);
-                autoSave();
-                topupStatusMsg = "Nap thanh cong " + formatMoney(val) + "!";
-            } else {
-                topupStatusMsg = "Vui long nhap so tien hop le!";
-            }
-        }
-
-        if (!topupStatusMsg.empty()) {
-            DrawText(topupStatusMsg.c_str(), 360, 540, 18, (topupStatusMsg.find("thanh cong") != string::npos) ? GREEN : RED);
-        }
-    }
-
-    // -------------------------------------------------------------
-    // TAB 2: LỊCH SỬ HÓA ĐƠN CỦA TÔI
-    // -------------------------------------------------------------
-    else if (customerTab == 2) {
         DrawRectangle(25, 140, 974, 550, WHITE);
         DrawRectangleLines(25, 140, 974, 550, (Color){ 203, 213, 225, 255 });
 
@@ -831,16 +883,16 @@ void AppUI::DrawCustomerMenu() {
 
         auto myInvs = sem.getInvoicesByCustomer(c->getId());
         if (myInvs.empty()) {
-            DrawText("Ban chua co hoa don sac nao.", 380, 330, 16, (Color){ 148, 163, 184, 255 });
+            DrawText("Ban chua co hoa don sac nao trong he thong.", 380, 330, 16, (Color){ 148, 163, 184, 255 });
         } else {
             int y = 245;
             for (int i = (int)myInvs.size() - 1; i >= 0; --i) {
                 if (y > 650) break;
                 auto& inv = myInvs[i];
-                DrawText(inv.invoiceId.c_str(), 60, y, 14, (Color){ 15, 23, 42, 255 });
-                DrawText(inv.sessionId.c_str(), 280, y, 14, (Color){ 100, 116, 139, 255 });
-                DrawText(formatMoney(inv.totalAmount).c_str(), 520, y, 14, (Color){ 22, 163, 74, 255 });
-                DrawText(formatTime(inv.date).c_str(), 760, y, 14, (Color){ 100, 116, 139, 255 });
+                DrawText(inv.getInvoiceId().c_str(), 60, y, 14, (Color){ 15, 23, 42, 255 });
+                DrawText(inv.getSessionId().c_str(), 280, y, 14, (Color){ 100, 116, 139, 255 });
+                DrawText(formatMoney(inv.getTotalAmount()).c_str(), 520, y, 14, (Color){ 22, 163, 74, 255 });
+                DrawText(formatTime(inv.getDate()).c_str(), 760, y, 14, (Color){ 100, 116, 139, 255 });
                 y += 32;
             }
         }
@@ -848,8 +900,9 @@ void AppUI::DrawCustomerMenu() {
 }
 
 // =====================================================================
-// MÀN HÌNH ĐANG TRONG PHIÊN SẠC (LIVE CHARGING SCREEN)
+// 7. MAN HINH DANG SAC TRUC TIEP (LIVE CHARGING SCREEN)
 // =====================================================================
+
 void AppUI::DrawCustomerCharging() {
     Customer* c = (Customer*)um.getLoggedInUser();
     if (!c) return;
@@ -860,111 +913,110 @@ void AppUI::DrawCustomerCharging() {
         return;
     }
 
-    ChargingStation* st = sm.getStationById(ses->stationId);
-    string stName = st ? st->name : ses->stationId;
-    string stAddr = st ? st->address : "";
+    ChargingStation* st = sm.getStationById(ses->getStationId());
+    string stName = st ? st->getName() : ses->getStationId();
+    string stAddr = st ? st->getAddress() : "";
 
     float pwr = 22.0f;
     float prc = 3500.0f;
     if (st) {
-        for (auto& p : st->ports) {
-            if (p.portId == ses->portId) {
-                pwr = p.powerKW;
-                prc = p.pricePerKWh;
-                break;
-            }
+        ChargingPort* p = st->getPortById(ses->getPortId());
+        if (p) {
+            pwr = p->getPowerKW();
+            prc = p->getPricePerKWh();
         }
     }
 
-    long long durationSec = time(0) - ses->startTime;
+    long long durationSec = time(0) - ses->getStartTime();
     if (durationSec < 0) durationSec = 0;
     int mins = (int)(durationSec / 60);
     int secs = (int)(durationSec % 60);
 
-    // Tính điện năng mô phỏng (1s thực = 1 phút sạc)
+    // Tinh dien nang tieu thu (Mo phong 1 giay thuc = 1 phut sac)
     float simulatedHours = (durationSec * 60.0f) / 3600.0f;
     float currentKWh = pwr * simulatedHours;
     if (currentKWh < 0.2f) currentKWh = 0.2f;
     float currentCost = currentKWh * prc;
 
-    // Tính tiến độ Pin %
-    float batCap = c->getBatteryCapacity();
-    if (batCap <= 0) batCap = 80.0f;
-    float addedPercent = (currentKWh / batCap) * 100.0f;
-    float currentPercent = 30.0f + addedPercent;
-    if (currentPercent > 100.0f) currentPercent = 100.0f;
-
-    // Nền tối hiện đại cho phiên sạc
+    // Nen toi hien dai cho man hinh dang sac
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){ 15, 23, 42, 255 });
 
-    // Tiêu đề
+    // Tieu de
     DrawText("⚡ XE CUA BAN DANG DUOC SAC DIEN", 300, 45, 26, (Color){ 56, 189, 248, 255 });
-    DrawText(TextFormat("Tram: %s  |  Dia chi: %s  |  Cong sac: %s (%.0f kW)", stName.c_str(), stAddr.c_str(), ses->portId.c_str(), pwr), 240, 85, 15, (Color){ 203, 213, 225, 255 });
+    DrawText(TextFormat("Tram: %s  |  Dia chi: %s  |  Cong sac: %s (%.0f kW)", stName.c_str(), stAddr.c_str(), ses->getPortId().c_str(), pwr), 240, 85, 15, (Color){ 203, 213, 225, 255 });
 
-    // Khung đồng hồ hiển thị
+    // Khung dong ho hien thi thong so
     DrawRectangleRounded((Rectangle){ 180, 130, 664, 460 }, 0.05f, 4, (Color){ 30, 41, 59, 255 });
 
-    // Thanh PIN trực quan
-    DrawRectangleRounded((Rectangle){ 240, 165, 544, 40 }, 0.2f, 4, (Color){ 51, 65, 85, 255 });
-    float progressWidth = 544.0f * (currentPercent / 100.0f);
-    DrawRectangleRounded((Rectangle){ 240, 165, progressWidth, 40 }, 0.2f, 4, (Color){ 34, 197, 94, 255 });
-    DrawText(TextFormat("Dung luong pin: %.1f %%", currentPercent), 430, 175, 18, WHITE);
+    // THANH TRẠNG THÁI ĐANG SẠC (Charging Status Animation)
+    // (Da loai bo toan bo phan tinh toan % pin theo yeu cau, thay bang thanh hieu ung dang sac)
+    Rectangle barRect = { 240, 165, 544, 45 };
+    DrawRectangleRounded(barRect, 0.2f, 4, (Color){ 15, 23, 42, 255 });
+    DrawRectangleRoundedLines(barRect, 0.2f, 4, (Color){ 56, 189, 248, 255 });
 
-    // Thời gian đã sạc
+    // Hieu ung luong dien chay nhe nhang (pulsing wave)
+    float waveOffset = fmodf((float)GetTime() * 120.0f, 544.0f);
+    DrawRectangleRounded((Rectangle){ 240 + waveOffset * 0.5f, 167, 120, 41 }, 0.2f, 4, (Color){ 34, 197, 94, 120 });
+
+    // Chu trang thai sac
+    DrawText("⚡ DANG SAC DIEN (CHARGING IN PROGRESS)...", 310, 178, 18, (Color){ 74, 222, 128, 255 });
+
+    // Thoi gian da sac
     DrawText("Thoi gian da sac:", 240, 240, 16, (Color){ 148, 163, 184, 255 });
     DrawText(TextFormat("%02d phut %02d giay", mins, secs), 240, 265, 28, WHITE);
 
-    // Điện năng tiêu thụ
-    DrawText("Dien nang da nạp:", 540, 240, 16, (Color){ 148, 163, 184, 255 });
+    // Dien nang da nap (kWh)
+    DrawText("Dien nang da nap:", 540, 240, 16, (Color){ 148, 163, 184, 255 });
     DrawText(TextFormat("%.2f kWh", currentKWh), 540, 265, 28, (Color){ 56, 189, 248, 255 });
 
-    // Chi phí ước tính
+    // Chi phi tam tinh
     DrawText("Chi phi tam tinh:", 240, 335, 16, (Color){ 148, 163, 184, 255 });
     DrawText(formatMoney(currentCost).c_str(), 240, 360, 28, (Color){ 250, 204, 21, 255 });
 
-    // Số dư khả dụng
+    // So du vi hien tai
     DrawText("So du vi hien tai:", 540, 335, 16, (Color){ 148, 163, 184, 255 });
     DrawText(formatMoney(c->getBalance()).c_str(), 540, 360, 28, (Color){ 74, 222, 128, 255 });
 
-    // Cảnh báo nếu chi phí sắp vượt quá số dư
+    // Canh bao neu chi phi vuot qua so du
     if (currentCost > c->getBalance()) {
         DrawText("⚠️ Chi phi da vuot qua so du! Vui long dung sac de thanh toan.", 240, 420, 15, RED);
     } else {
         DrawText("Giu an toan - Khong ngat day sac khi chua bam dung sac tren man hinh.", 250, 420, 14, (Color){ 148, 163, 184, 255 });
     }
 
-    // Nút DỪNG SẠC & THANH TOÁN
+    // Nut Dung Sac & Thanh Toan
     if (GuiButton((Rectangle){ 330, 480, 364, 55 }, "🛑 DUNG SAC & THANH TOAN")) {
-        // Lưu thông tin để hiện hóa đơn
+        // Luu thong tin de hien thi tren hoa don
         receiptStationName = stName;
-        receiptPortId = ses->portId;
+        receiptPortId = ses->getPortId();
         receiptKWh = currentKWh;
         receiptCost = currentCost;
 
         if (sem.endSession(c->getId(), sm, um)) {
             receiptRemainingBal = c->getBalance();
             Invoice* lastInv = sem.getLastInvoice(c->getId());
-            receiptInvoiceId = lastInv ? lastInv->invoiceId : "INV_SUCCESS";
-            autoSave();
+            receiptInvoiceId = lastInv ? lastInv->getInvoiceId() : "INV_SUCCESS";
+            autoSave(); // Luu ngay lap tuc sau khi dung sac va tru tien
             currentState = STATE_CUSTOMER_RECEIPT;
         }
     }
 }
 
 // =====================================================================
-// MÀN HÌNH BIÊN LAI / HÓA ĐƠN HOÀN TẤT (RECEIPT)
+// 8. MAN HINH BIEN LAI HOA DON (RECEIPT SCREEN)
 // =====================================================================
+
 void AppUI::DrawCustomerReceipt() {
     Customer* c = (Customer*)um.getLoggedInUser();
     if (!c) return;
 
     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){ 241, 245, 249, 255 });
 
-    // Card hóa đơn
+    // Card Hoa don thanh toan
     DrawRectangleRounded((Rectangle){ 262, 100, 500, 530 }, 0.05f, 4, WHITE);
     DrawRectangleRoundedLines((Rectangle){ 262, 100, 500, 530 }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
 
-    // Header hóa đơn
+    // Header Hoa don
     DrawRectangle(262, 100, 500, 80, (Color){ 22, 101, 52, 255 });
     DrawText("✅ THANH TOAN THANH CONG!", 350, 125, 22, WHITE);
     DrawText("Hoa Don Dien Tu - PBL2 EV Station", 380, 152, 14, (Color){ 187, 247, 208, 255 });
