@@ -41,6 +41,7 @@ private:
 
     AppState currentState;      // Trang thai man hinh hien tai
     Font uiFont;                // Phong chu he thong Segoe UI giup chu to ro, min mang
+    Texture2D loginBgTexture;   // Anh nen toa nha truong Bach Khoa cho man hinh dang nhap
 
     /**
      * @brief Ham tien ich tu dong ghi luu toan bo du lieu ra tep CSV

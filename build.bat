@@ -1,7 +1,7 @@
 @echo off
 taskkill /F /IM EVC_System.exe >nul 2>&1
 set CXX=g++
-set CXXFLAGS=-Wall -std=c++11 -O2
+set CXXFLAGS=-Wall -std=c++11 -O2 -finput-charset=UTF-8 -fexec-charset=UTF-8
 set INCLUDES=-I. -I"C:\raylib\raylib\src" -I"EVC_System\Header Files"
 set LIBS=-L"C:\raylib\raylib\src" -lraylib -lopengl32 -lgdi32 -lwinmm
 

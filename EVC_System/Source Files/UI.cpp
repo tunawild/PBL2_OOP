@@ -8,16 +8,42 @@
 #include <iomanip>
 #include <sstream>
 #include <cmath>
+#include <vector>
 
 using namespace std;
+
+// =====================================================================
+// BẢNG MÃ UNICODE TIẾNG VIỆT ĐẦY ĐỦ CHO PHÔNG CHỮ
+// =====================================================================
+
+static std::vector<int> getVietnameseCodepoints() {
+    std::vector<int> cp;
+    for (int i = 32; i <= 126; i++) cp.push_back(i);        // Ký tự ASCII cơ bản (32 - 126)
+    for (int i = 160; i <= 255; i++) cp.push_back(i);       // Latin-1 Supplement (À, Á, Â,...)
+    for (int i = 0x0100; i <= 0x024F; i++) cp.push_back(i); // Latin Extended-A và Latin Extended-B (Toàn bộ Ơ, ơ, Ư, ư, Ă, ă, Đ, đ...)
+    for (int i = 0x1EA0; i <= 0x1EF9; i++) cp.push_back(i); // Latin Extended Additional (Toàn bộ âm tiết tiếng Việt có dấu)
+    // Các ký hiệu dấu câu và biểu tượng hỗ trợ
+    cp.push_back(0x2010); // gạch nối ngắn
+    cp.push_back(0x2013); // gạch nối ngắn –
+    cp.push_back(0x2014); // gạch ngang dài —
+    cp.push_back(0x2018); // mở nháy đơn ‘
+    cp.push_back(0x2019); // đóng nháy đơn ’
+    cp.push_back(0x201C); // mở nháy kép “
+    cp.push_back(0x201D); // đóng nháy kép ”
+    cp.push_back(0x2022); // dấu chấm tròn •
+    cp.push_back(0x2026); // dấu ba chấm …
+    cp.push_back(0x20AB); // ký hiệu đồng ₫
+    cp.push_back(0x2212); // dấu trừ toán học
+    return cp;
+}
 
 // =====================================================================
 // CAC HAM HO TRO DINH DANG (FORMAT HELPERS)
 // =====================================================================
 
 /**
- * @brief Dinh dang so tien sang chuoi tien te Viet Nam Dong (VND) co dau phay ngan cach.
- * Vi du: 500000 -> "500,000 VND"
+ * @brief Định dạng số tiền sang chuỗi tiền tệ Việt Nam Đồng (VNĐ) có dấu phẩy ngăn cách.
+ * Ví dụ: 500000 -> "500,000 VNĐ"
  */
 static string formatMoney(float amount) {
     long long val = (long long)amount;
@@ -33,7 +59,7 @@ static string formatMoney(float amount) {
             count = 0;
         }
     }
-    return res + " VND";
+    return res + " VNĐ";
 }
 
 /**
@@ -74,6 +100,7 @@ AppUI::AppUI(UserManager& u, StationManager& s, SessionManager& se)
       receiptInvoiceId(""), receiptStationName(""), receiptPortId(""), receiptKWh(0.0f), receiptCost(0.0f), receiptRemainingBal(0.0f)
 {
     uiFont.texture.id = 0;
+    loginBgTexture.id = 0;
 
     // Khoi tao bo dem bo nho cho cac chuoi nhap lieu
     memset(loginUsername, 0, sizeof(loginUsername));
@@ -106,23 +133,45 @@ AppUI::~AppUI() {
         UnloadFont(uiFont);
         uiFont.texture.id = 0;
     }
+    if (loginBgTexture.id != 0) {
+        UnloadTexture(loginBgTexture);
+        loginBgTexture.id = 0;
+    }
 }
 
 void AppUI::Init() {
     GuiLoadStyleDefault();
 
-    // Nap phong chu he thong Segoe UI giup chu to ro, sac net, khong bi rang cua
+    // Lấy bảng mã ký tự tiếng Việt đầy đủ (bao gồm toàn bộ Latin-1, Latin-A, Latin-B Ơ ơ Ư ư, Latin Extended Additional)
+    std::vector<int> vnCodepoints = getVietnameseCodepoints();
+
+    // Nạp phông chữ hệ thống Segoe UI hiển thị tiếng Việt sắc nét, rõ ràng
     if (FileExists("C:\\Windows\\Fonts\\segoeui.ttf")) {
-        uiFont = LoadFontEx("C:\\Windows\\Fonts\\segoeui.ttf", 40, 0, 0);
+        uiFont = LoadFontEx("C:\\Windows\\Fonts\\segoeui.ttf", 36, vnCodepoints.data(), (int)vnCodepoints.size());
         if (uiFont.texture.id != 0) {
+            GenTextureMipmaps(&uiFont.texture);
             SetTextureFilter(uiFont.texture, TEXTURE_FILTER_BILINEAR);
             GuiSetFont(uiFont);
         }
     } else if (FileExists("C:\\Windows\\Fonts\\arial.ttf")) {
-        uiFont = LoadFontEx("C:\\Windows\\Fonts\\arial.ttf", 40, 0, 0);
+        uiFont = LoadFontEx("C:\\Windows\\Fonts\\arial.ttf", 36, vnCodepoints.data(), (int)vnCodepoints.size());
         if (uiFont.texture.id != 0) {
+            GenTextureMipmaps(&uiFont.texture);
             SetTextureFilter(uiFont.texture, TEXTURE_FILTER_BILINEAR);
             GuiSetFont(uiFont);
+        }
+    }
+
+    // Nạp ảnh nền tòa nhà Bách Khoa cho màn hình đăng nhập (hỗ trợ PNG và JPG)
+    if (FileExists("assets/login_bg.png")) {
+        loginBgTexture = LoadTexture("assets/login_bg.png");
+        if (loginBgTexture.id != 0) {
+            SetTextureFilter(loginBgTexture, TEXTURE_FILTER_BILINEAR);
+        }
+    } else if (FileExists("assets/login_bg.jpg")) {
+        loginBgTexture = LoadTexture("assets/login_bg.jpg");
+        if (loginBgTexture.id != 0) {
+            SetTextureFilter(loginBgTexture, TEXTURE_FILTER_BILINEAR);
         }
     }
 
@@ -135,7 +184,8 @@ void AppUI::Init() {
 
 void AppUI::DrawTextUI(const string& text, float posX, float posY, float fontSize, Color color) {
     if (uiFont.texture.id != 0) {
-        DrawTextEx(uiFont, text.c_str(), (Vector2){ posX, posY }, fontSize, 1.0f, color);
+        float spacing = (fontSize <= 15.0f) ? 0.0f : 0.5f;
+        DrawTextEx(uiFont, text.c_str(), (Vector2){ posX, posY }, fontSize, spacing, color);
     } else {
         DrawText(text.c_str(), (int)posX, (int)posY, (int)fontSize, color);
     }
@@ -143,8 +193,9 @@ void AppUI::DrawTextUI(const string& text, float posX, float posY, float fontSiz
 
 void AppUI::DrawTextUICentered(const string& text, float posY, float fontSize, Color color) {
     float textW = 0.0f;
+    float spacing = (fontSize <= 15.0f) ? 0.0f : 0.5f;
     if (uiFont.texture.id != 0) {
-        Vector2 sz = MeasureTextEx(uiFont, text.c_str(), fontSize, 1.0f);
+        Vector2 sz = MeasureTextEx(uiFont, text.c_str(), fontSize, spacing);
         textW = sz.x;
     } else {
         textW = (float)MeasureText(text.c_str(), (int)fontSize);
@@ -184,36 +235,100 @@ void AppUI::DrawLogin() {
     float screenW = (float)GetScreenWidth();
     float screenH = (float)GetScreenHeight();
 
-    // 1. Header Banner trai dai 100% man hinh tu mep trai sang mep phai
-    DrawRectangle(0, 0, (int)screenW, 140, (Color){ 30, 58, 138, 255 });
-    DrawTextUICentered("EV CHARGING STATION MANAGEMENT", 35, 34, WHITE);
-    DrawTextUICentered("HE THONG QUAN LY TRAM SAC XE DIEN (PBL2 - OOP)", 85, 20, (Color){ 191, 219, 254, 255 });
+    // Điểm chia đôi màn hình: 50% bên trái (Ảnh tòa nhà) và 50% bên phải (Khung đăng nhập)
+    float splitX = screenW * 0.50f;
 
-    // 2. Khung Login Card can giua tuyet doi tren man hinh
-    float cardW = 520.0f;
-    float cardH = 460.0f;
-    float cardX = (screenW - cardW) / 2.0f;
-    float cardY = (screenH - 140.0f - cardH) / 2.0f + 140.0f;
+    // Màu nền chủ đạo bên phải: Xanh biển sương nhạt (Soft Ocean Mist)
+    Color rightBg = (Color){ 241, 246, 254, 255 };
 
-    DrawRectangleRounded((Rectangle){ cardX, cardY, cardW, cardH }, 0.05f, 4, WHITE);
-    DrawRectangleRoundedLines((Rectangle){ cardX, cardY, cardW, cardH }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
-    
-    // Tieu de hop dang nhap
-    float titleW = 240.0f;
-    if (uiFont.texture.id != 0) {
-        titleW = MeasureTextEx(uiFont, "DANG NHAP HE THONG", 24, 1.0f).x;
+    // =====================================================================
+    // 1. BÊN TRÁI: ẢNH NỀN TÒA NHÀ & VÙNG CHUYỂN TIẾP (HORIZONTAL FADE)
+    // =====================================================================
+    // Vùng chuyển tiếp mượt mà: bắt đầu mờ từ splitX - 160px và tan biến hoàn toàn tại splitX + 130px
+    float fadeW = 290.0f;
+    float fadeStart = splitX - 160.0f;
+    float fadeEnd = fadeStart + fadeW; // splitX + 130.0f
+
+    if (loginBgTexture.id != 0) {
+        float tw = (float)loginBgTexture.width;
+        float th = (float)loginBgTexture.height;
+        float scale = fmaxf(fadeEnd / tw, screenH / th);
+        float sw = fadeEnd / scale;
+        float sh = screenH / scale;
+        float sx = (tw - sw) / 2.0f;
+        float sy = (th - sh) / 2.0f;
+
+        Rectangle sourceRec = { sx, sy, sw, sh };
+        Rectangle destRec = { 0, 0, fadeEnd, screenH };
+        DrawTexturePro(loginBgTexture, sourceRec, destRec, (Vector2){ 0, 0 }, 0.0f, WHITE);
+
+        // Lớp phủ gradient tối ở chân ảnh và góc trên để tôn chữ trắng và vàng
+        DrawRectangleGradientV(0, (int)(screenH * 0.45f), (int)fadeEnd, (int)(screenH * 0.55f), (Color){ 0, 0, 0, 0 }, (Color){ 15, 30, 65, 245 });
+        DrawRectangleGradientV(0, 0, (int)fadeEnd, 130, (Color){ 15, 30, 65, 180 }, (Color){ 0, 0, 0, 0 });
+    } else {
+        DrawRectangleGradientV(0, 0, (int)fadeEnd, (int)screenH, (Color){ 30, 64, 175, 255 }, (Color){ 15, 30, 65, 255 });
     }
-    DrawTextUI("DANG NHAP HE THONG", cardX + (cardW - titleW) / 2.0f, cardY + 30, 24, (Color){ 15, 23, 42, 255 });
 
-    float inputX = cardX + 50.0f;
-    float inputW = cardW - 100.0f;
+    // HIỆU ỨNG CHUYỂN TIẾP MỀM MẠI (HORIZONTAL FADE TRANSITION)
+    // Phủ dải gradient trong suốt từ fadeStart tới fadeEnd, làm mờ dần ảnh và tan biến tự nhiên vào nền rightBg
+    DrawRectangleGradientH((int)fadeStart, 0, (int)fadeW, (int)screenH, (Color){ rightBg.r, rightBg.g, rightBg.b, 0 }, rightBg);
+    // Lớp bổ sung thứ hai làm dịu đường cong alpha, xóa bỏ hoàn toàn bất kỳ cảm giác gờ cạnh
+    DrawRectangleGradientH((int)(fadeStart + fadeW * 0.45f), 0, (int)(fadeW * 0.55f), (int)screenH, (Color){ rightBg.r, rightBg.g, rightBg.b, 0 }, (Color){ rightBg.r, rightBg.g, rightBg.b, 200 });
 
-    // Dinh nghia hitbox hinh chu nhat cho 2 o nhap lieu
-    Rectangle userBox = { inputX, cardY + 115, inputW, 44 };
-    Rectangle passBox = { inputX, cardY + 205, inputW, 44 };
-    Rectangle loginBtn = { inputX, cardY + 280, inputW, 50 };
+    // TOÀN BỘ NỬA BÊN PHẢI ĐƯỢC PHỦ NỀN ĐỒNG NHẤT KHÔNG CÓ BẤT KỲ ĐƯỜNG RÃNH HAY GẠCH NÀO
+    DrawRectangle((int)fadeEnd - 1, 0, (int)(screenW - fadeEnd + 2), (int)screenH, rightBg);
 
-    // Xu ly click chuot truc tiep de hitbox luon khop 100%
+    // Text thông tin trường & khoa ở góc trên bên trái
+    DrawTextUI("TRƯỜNG ĐẠI HỌC BÁCH KHOA – ĐẠI HỌC ĐÀ NẴNG", 35, 30, 16, WHITE);
+    DrawTextUI("KHOA CÔNG NGHỆ THÔNG TIN", 35, 56, 15, (Color){ 250, 204, 21, 255 }); // Màu Vàng Hoàng Gia
+
+    // Text thông tin đồ án ở chân ảnh bên trái
+    float bottomTextY = screenH - 135.0f;
+    // Thẻ nhỏ màu Vàng kim
+    DrawRectangleRounded((Rectangle){ 35, bottomTextY - 34, 250, 28 }, 0.3f, 4, (Color){ 234, 179, 8, 240 });
+    DrawTextUI("ĐỒ ÁN CƠ SỞ LẬP TRÌNH (PBL2)", 48, bottomTextY - 28, 14, (Color){ 15, 23, 42, 255 });
+
+    DrawTextUI("HỆ THỐNG QUẢN LÝ TRẠM SẠC XE ĐIỆN", 35, bottomTextY, 26, WHITE);
+    DrawTextUI("Mô hình điều phối trạm sạc, cổng sạc và thanh toán thông minh", 35, bottomTextY + 38, 15, (Color){ 191, 219, 254, 255 });
+    DrawTextUI("Ngôn ngữ lập trình C++ • Đồ họa Raylib • Kiến trúc Hướng đối tượng OOP", 35, bottomTextY + 66, 14, (Color){ 147, 197, 253, 255 });
+
+    // =====================================================================
+    // 2. BÊN PHẢI: KHUNG ĐĂNG NHẬP VỚI TÔNG XANH BIỂN & VÀNG KIM
+    // =====================================================================
+    float rightW = screenW - splitX;
+
+    // Kích thước Card Đăng nhập
+    float formW = 390.0f;
+    float cardW = formW + 70.0f;
+    float cardH = 460.0f;
+    float cardX = splitX + (rightW - cardW) / 2.0f;
+    float cardY = (screenH - cardH) / 2.0f;
+    if (cardY < 30.0f) cardY = 30.0f;
+
+    // Vẽ Card nền Trắng sang trọng với góc bo tròn
+    DrawRectangleRounded((Rectangle){ cardX, cardY, cardW, cardH }, 0.04f, 4, WHITE);
+    DrawRectangleRoundedLines((Rectangle){ cardX, cardY, cardW, cardH }, 0.04f, 4, (Color){ 219, 234, 254, 255 });
+
+    // DẢI VIỀN VÀNG HOÀNG GIA (GOLD ACCENT RIBBON) Ở ĐỈNH CARD
+    DrawRectangleRounded((Rectangle){ cardX + 25, cardY, cardW - 50, 5 }, 0.5f, 4, (Color){ 234, 179, 8, 255 });
+
+    float formX = cardX + 35.0f;
+
+    // Huy hiệu PBL2: Nền vàng nhạt, viền vàng kim, chữ vàng hổ phách
+    DrawRectangleRounded((Rectangle){ formX, cardY + 30, 265, 30 }, 0.3f, 4, (Color){ 254, 243, 199, 255 });
+    DrawRectangleRoundedLines((Rectangle){ formX, cardY + 30, 265, 30 }, 0.3f, 4, (Color){ 245, 158, 11, 255 });
+    DrawTextUI("PBL2 • DỰ ÁN HỆ THỐNG TRẠM SẠC", formX + 14, cardY + 36, 14, (Color){ 180, 83, 9, 255 });
+
+    // Tiêu đề chính màn hình Đăng nhập (Màu Xanh Biển Đậm)
+    DrawTextUI("ĐĂNG NHẬP HỆ THỐNG", formX, cardY + 72, 28, (Color){ 30, 58, 138, 255 });
+    DrawTextUI("Quản lý và vận hành trạm sạc xe điện thông minh", formX, cardY + 106, 14, (Color){ 100, 116, 139, 255 });
+
+    // Tọa độ các thành phần nhập liệu
+    Rectangle userBox = { formX, cardY + 164, formW, 44 };
+    Rectangle passBox = { formX, cardY + 248, formW, 44 };
+    Rectangle loginBtn = { formX, cardY + 316, formW, 48 };
+
+    // Xử lý click chuột trực tiếp
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 mouse = GetMousePosition();
         if (CheckCollisionPointRec(mouse, userBox)) {
@@ -228,7 +343,7 @@ void AppUI::DrawLogin() {
         }
     }
 
-    // Ho tro phim TAB va ENTER de chuyen o nhap lieu va dang nhap nhanh
+    // Hỗ trợ phím TAB và ENTER
     if (IsKeyPressed(KEY_TAB)) {
         if (loginUsernameActive) {
             loginUsernameActive = false;
@@ -249,16 +364,40 @@ void AppUI::DrawLogin() {
         }
     }
 
-    // O nhap Username
-    DrawTextUI("Ten dang nhap (Username):", inputX, cardY + 85, 17, (Color){ 71, 85, 105, 255 });
+    // Ô nhập Username
+    DrawTextUI("Tên đăng nhập (Username):", formX, cardY + 140, 15, (Color){ 30, 41, 59, 255 });
     GuiTextBox(userBox, loginUsername, 64, loginUsernameActive);
+    if (loginUsernameActive) {
+        // Viền ánh Vàng Kim nổi bật khi đang nhập Username
+        DrawRectangleRoundedLines((Rectangle){ userBox.x - 2, userBox.y - 2, userBox.width + 4, userBox.height + 4 }, 0.1f, 4, (Color){ 234, 179, 8, 255 });
+    }
 
-    // O nhap Password
-    DrawTextUI("Mat khau (Password):", inputX, cardY + 175, 17, (Color){ 71, 85, 105, 255 });
+    // Ô nhập Password
+    DrawTextUI("Mật khẩu (Password):", formX, cardY + 224, 15, (Color){ 30, 41, 59, 255 });
     GuiTextBox(passBox, loginPassword, 64, loginPasswordActive);
+    if (loginPasswordActive) {
+        // Viền ánh Vàng Kim nổi bật khi đang nhập Password
+        DrawRectangleRoundedLines((Rectangle){ passBox.x - 2, passBox.y - 2, passBox.width + 4, passBox.height + 4 }, 0.1f, 4, (Color){ 234, 179, 8, 255 });
+    }
 
-    // Nut Bam Dang Nhap (Click chuot hoac nhan Enter khi dang nhap mat khau)
-    if (GuiButton(loginBtn, "DANG NHAP") || enterTriggeredLogin) {
+    // Nút Bấm Đăng Nhập: Màu Xanh Biển Hoàng Gia & Viền Vàng Kim
+    Vector2 mousePos = GetMousePosition();
+    bool btnHover = CheckCollisionPointRec(mousePos, loginBtn);
+    bool btnClick = btnHover && IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
+
+    Color btnBg = btnHover ? (Color){ 37, 99, 235, 255 } : (Color){ 30, 64, 175, 255 }; // Xanh biển
+    Color btnBorder = btnHover ? (Color){ 250, 204, 21, 255 } : (Color){ 234, 179, 8, 255 }; // Vàng kim
+    DrawRectangleRounded(loginBtn, 0.15f, 4, btnBg);
+    DrawRectangleRoundedLines(loginBtn, 0.15f, 4, btnBorder);
+
+    // Chữ ĐĂNG NHẬP căn giữa nút
+    float btnTxtW = 120.0f;
+    if (uiFont.texture.id != 0) {
+        btnTxtW = MeasureTextEx(uiFont, "ĐĂNG NHẬP", 18, 1.0f).x;
+    }
+    DrawTextUI("ĐĂNG NHẬP", loginBtn.x + (loginBtn.width - btnTxtW) / 2.0f, loginBtn.y + 14, 18, (Color){ 254, 240, 138, 255 }); // Chữ Vàng sáng
+
+    if (btnClick || enterTriggeredLogin) {
         loginUsernameActive = false;
         loginPasswordActive = false;
         if (um.login(loginUsername, loginPassword)) {
@@ -276,20 +415,19 @@ void AppUI::DrawLogin() {
             }
         } else {
             loginError = true;
-            loginErrorMsg = "Sai tai khoan hoac mat khau!";
+            loginErrorMsg = "Sai tên đăng nhập hoặc mật khẩu!";
         }
     }
 
+    // Thông báo lỗi nếu đăng nhập sai
     if (loginError) {
-        float errW = 200.0f;
-        if (uiFont.texture.id != 0) errW = MeasureTextEx(uiFont, loginErrorMsg.c_str(), 16, 1.0f).x;
-        DrawTextUI(loginErrorMsg, cardX + (cardW - errW) / 2.0f, cardY + 345, 16, RED);
+        float errW = 240.0f;
+        if (uiFont.texture.id != 0) errW = MeasureTextEx(uiFont, loginErrorMsg.c_str(), 15, 1.0f).x;
+        DrawTextUI(loginErrorMsg, formX + (formW - errW) / 2.0f, cardY + 382.0f, 15, (Color){ 220, 38, 38, 255 });
     }
 
-    // Goi y tai khoan kiem thu ben duoi card
-    DrawRectangleRounded((Rectangle){ cardX + 30.0f, cardY + 375.0f, cardW - 60.0f, 65.0f }, 0.1f, 4, (Color){ 241, 245, 249, 255 });
-    DrawTextUI("Tai khoan Admin: admin / admin123", cardX + 50.0f, cardY + 387.0f, 15, (Color){ 100, 116, 139, 255 });
-    DrawTextUI("Tai khoan Khach: khach1 / 123", cardX + 50.0f, cardY + 412.0f, 15, (Color){ 100, 116, 139, 255 });
+    // Dòng giới thiệu nhỏ ở chân màn hình
+    DrawTextUI("Dự án PBL2: Lập trình hướng đối tượng (OOP) • Khoa Công nghệ Thông tin", formX - 10, cardY + cardH + 18.0f, 13, (Color){ 100, 116, 139, 255 });
 }
 
 // =====================================================================
@@ -307,21 +445,21 @@ void AppUI::DrawAdminSidebar() {
     DrawTextUI("EVC ADMIN", 50, 40, 24, (Color){ 56, 189, 248, 255 });
 
     // Cac nut chuyen tab quan ly to ro, de bam
-    if (GuiButton((Rectangle){ 15, 115, sideW - 30, 48 }, "Dashboard")) {
+    if (GuiButton((Rectangle){ 15, 115, sideW - 30, 48 }, "Bảng điều khiển")) {
         currentState = STATE_ADMIN_DASHBOARD;
     }
-    if (GuiButton((Rectangle){ 15, 175, sideW - 30, 48 }, "Tram & Cong sac")) {
+    if (GuiButton((Rectangle){ 15, 175, sideW - 30, 48 }, "Trạm & Cổng sạc")) {
         currentState = STATE_ADMIN_STATIONS;
     }
-    if (GuiButton((Rectangle){ 15, 235, sideW - 30, 48 }, "Khach hang")) {
+    if (GuiButton((Rectangle){ 15, 235, sideW - 30, 48 }, "Khách hàng")) {
         currentState = STATE_ADMIN_CUSTOMERS;
     }
-    if (GuiButton((Rectangle){ 15, 295, sideW - 30, 48 }, "Hoa don & Phien sac")) {
+    if (GuiButton((Rectangle){ 15, 295, sideW - 30, 48 }, "Hóa đơn & Phiên sạc")) {
         currentState = STATE_ADMIN_INVOICES;
     }
     
     // Nut Dang Xuat o cuoi sidebar
-    if (GuiButton((Rectangle){ 15, screenH - 70, sideW - 30, 48 }, "DANG XUAT")) {
+    if (GuiButton((Rectangle){ 15, screenH - 70, sideW - 30, 48 }, "ĐĂNG XUẤT")) {
         um.logout();
         currentState = STATE_LOGIN;
         memset(loginUsername, 0, sizeof(loginUsername));
@@ -342,7 +480,7 @@ void AppUI::DrawAdminDashboard() {
     float startX = 265.0f;
     float contentW = (float)GetScreenWidth() - startX - 30.0f;
 
-    DrawTextUI("THONG KE TONG QUAN HE THONG", startX, 25, 28, (Color){ 15, 23, 42, 255 });
+    DrawTextUI("BẢNG THỐNG KÊ TỔNG QUAN HỆ THỐNG", startX, 25, 28, (Color){ 15, 23, 42, 255 });
 
     int totalStations = sm.getTotalStations();
     int totalPorts = sm.getTotalPorts();
@@ -360,25 +498,25 @@ void AppUI::DrawAdminDashboard() {
 
     // The 1: Tong so tram
     DrawRectangleRounded((Rectangle){ startX, cardY, cardW, cardH }, 0.1f, 4, (Color){ 224, 242, 254, 255 });
-    DrawTextUI("Tong so tram sac", startX + 18, cardY + 16, 16, (Color){ 3, 105, 161, 255 });
+    DrawTextUI("Tổng số trạm sạc", startX + 18, cardY + 16, 16, (Color){ 3, 105, 161, 255 });
     DrawTextUI(TextFormat("%d", totalStations), startX + 18, cardY + 45, 42, (Color){ 2, 132, 199, 255 });
 
     // The 2: Cong trong kha dung (Available)
     float c2X = startX + (cardW + cardSpacing);
     DrawRectangleRounded((Rectangle){ c2X, cardY, cardW, cardH }, 0.1f, 4, (Color){ 220, 252, 231, 255 });
-    DrawTextUI("Cong trong (Available)", c2X + 18, cardY + 16, 16, (Color){ 21, 128, 61, 255 });
+    DrawTextUI("Cổng trống (Available)", c2X + 18, cardY + 16, 16, (Color){ 21, 128, 61, 255 });
     DrawTextUI(TextFormat("%d / %d", avail, totalPorts), c2X + 18, cardY + 45, 42, (Color){ 22, 163, 74, 255 });
 
     // The 3: Cong dang duoc sac (Occupied)
     float c3X = startX + 2.0f * (cardW + cardSpacing);
     DrawRectangleRounded((Rectangle){ c3X, cardY, cardW, cardH }, 0.1f, 4, (Color){ 254, 243, 199, 255 });
-    DrawTextUI("Dang sac (Occupied)", c3X + 18, cardY + 16, 16, (Color){ 180, 83, 9, 255 });
+    DrawTextUI("Đang sạc (Occupied)", c3X + 18, cardY + 16, 16, (Color){ 180, 83, 9, 255 });
     DrawTextUI(TextFormat("%d", occ), c3X + 18, cardY + 45, 42, (Color){ 217, 119, 6, 255 });
 
     // The 4: Cong dang bao tri (Maintenance)
     float c4X = startX + 3.0f * (cardW + cardSpacing);
     DrawRectangleRounded((Rectangle){ c4X, cardY, cardW, cardH }, 0.1f, 4, (Color){ 254, 226, 226, 255 });
-    DrawTextUI("Bao tri (Maintenance)", c4X + 18, cardY + 16, 16, (Color){ 185, 28, 28, 255 });
+    DrawTextUI("Bảo trì (Maintenance)", c4X + 18, cardY + 16, 16, (Color){ 185, 28, 28, 255 });
     DrawTextUI(TextFormat("%d", maint), c4X + 18, cardY + 45, 42, (Color){ 220, 38, 38, 255 });
 
     // Khung Doanh thu & Dien nang tieu thu co dan theo 2 nua
@@ -387,27 +525,27 @@ void AppUI::DrawAdminDashboard() {
     float boxY = cardY + cardH + 18.0f;
 
     DrawRectangleRounded((Rectangle){ startX, boxY, boxW, boxH }, 0.1f, 4, (Color){ 238, 242, 255, 255 });
-    DrawTextUI("Tong doanh thu he thong", startX + 22, boxY + 15, 17, (Color){ 67, 56, 202, 255 });
+    DrawTextUI("Tổng doanh thu hệ thống", startX + 22, boxY + 15, 17, (Color){ 67, 56, 202, 255 });
     DrawTextUI(formatMoney(revenue), startX + 22, boxY + 45, 28, (Color){ 79, 70, 229, 255 });
 
     DrawRectangleRounded((Rectangle){ startX + boxW + 20.0f, boxY, boxW, boxH }, 0.1f, 4, (Color){ 243, 232, 255, 255 });
-    DrawTextUI("Tong dien nang tieu thu", startX + boxW + 42, boxY + 15, 17, (Color){ 126, 34, 206, 255 });
+    DrawTextUI("Tổng điện năng tiêu thụ", startX + boxW + 42, boxY + 15, 17, (Color){ 126, 34, 206, 255 });
     DrawTextUI(TextFormat("%.2f kWh", energy), startX + boxW + 42, boxY + 45, 28, (Color){ 147, 51, 234, 255 });
 
     // Bang danh sach cac phien sac truc tiep (Live Sessions)
     float tableY = boxY + boxH + 25.0f;
     float tableH = (float)GetScreenHeight() - tableY - 25.0f;
 
-    DrawTextUI("CAC PHIEN SAC DANG DIEN RA (LIVE SESSIONS)", startX, tableY - 28.0f, 20, (Color){ 30, 41, 59, 255 });
+    DrawTextUI("CÁC PHIÊN SẠC ĐANG DIỄN RA (LIVE SESSIONS)", startX, tableY - 28.0f, 20, (Color){ 30, 41, 59, 255 });
     DrawRectangle((int)startX, (int)tableY, (int)contentW, (int)tableH, WHITE);
     DrawRectangleLines((int)startX, (int)tableY, (int)contentW, (int)tableH, (Color){ 203, 213, 225, 255 });
 
     DrawRectangle((int)startX, (int)tableY, (int)contentW, 40, (Color){ 241, 245, 249, 255 });
-    DrawTextUI("Ma Phien", startX + 20, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Khach Hang", startX + contentW * 0.22f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Tram Sac", startX + contentW * 0.44f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Cong", startX + contentW * 0.68f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Thoi Gian Bat Dau", startX + contentW * 0.80f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Mã Phiên", startX + 20, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Khách Hàng", startX + contentW * 0.22f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Trạm Sạc", startX + contentW * 0.44f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Cổng", startX + contentW * 0.68f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Thời Gian Bắt Đầu", startX + contentW * 0.80f, tableY + 10, 16, (Color){ 71, 85, 105, 255 });
 
     float py = tableY + 52.0f;
     int liveCount = 0;
@@ -430,7 +568,7 @@ void AppUI::DrawAdminDashboard() {
         }
     }
     if (liveCount == 0) {
-        DrawTextUI("Hien khong co phien sac nao dang dien ra tren he thong.", startX + contentW * 0.30f, tableY + tableH * 0.45f, 18, (Color){ 148, 163, 184, 255 });
+        DrawTextUI("Hiện không có phiên sạc nào đang diễn ra trên hệ thống.", startX + contentW * 0.30f, tableY + tableH * 0.45f, 18, (Color){ 148, 163, 184, 255 });
     }
 }
 
@@ -444,18 +582,18 @@ void AppUI::DrawAdminStations() {
     float startX = 265.0f;
     float contentW = (float)GetScreenWidth() - startX - 30.0f;
 
-    DrawTextUI("QUAN LY TRAM SAC & CONG SAC", startX, 25, 28, (Color){ 15, 23, 42, 255 });
+    DrawTextUI("QUẢN LÝ TRẠM SẠC & CỔNG SẠC", startX, 25, 28, (Color){ 15, 23, 42, 255 });
 
     // Nut Mo Form Them Tram Moi (Can phai)
     float addBtnW = 230.0f;
-    if (GuiButton((Rectangle){ startX + contentW - addBtnW, 20, addBtnW, 40 }, "+ THEM TRAM SAC MOI")) {
+    if (GuiButton((Rectangle){ startX + contentW - addBtnW, 20, addBtnW, 40 }, "+ THÊM TRẠM SẠC MỚI")) {
         showAddStationForm = !showAddStationForm;
         showAddPortForm = false;
         stationStatusMsg = "";
     }
 
     if (!stationStatusMsg.empty()) {
-        DrawTextUI(stationStatusMsg, startX, 62, 16, (stationStatusMsg.find("thanh cong") != string::npos) ? GREEN : RED);
+        DrawTextUI(stationStatusMsg, startX, 62, 16, (stationStatusMsg.find("thành công") != string::npos) ? GREEN : RED);
     }
 
     // FORM THÊM TRẠM SẠC MỚI
@@ -464,7 +602,7 @@ void AppUI::DrawAdminStations() {
         float formH = 125.0f;
         DrawRectangleRounded((Rectangle){ startX, formY, contentW, formH }, 0.05f, 4, (Color){ 241, 245, 249, 255 });
         DrawRectangleRoundedLines((Rectangle){ startX, formY, contentW, formH }, 0.05f, 4, (Color){ 148, 163, 184, 255 });
-        DrawTextUI("NHAP THONG TIN TRAM SAC MOI:", startX + 20, formY + 12, 17, (Color){ 30, 41, 59, 255 });
+        DrawTextUI("NHẬP THÔNG TIN TRẠM SẠC MỚI:", startX + 20, formY + 12, 17, (Color){ 30, 41, 59, 255 });
 
         Rectangle nameBox = { startX + 105, formY + 42, 260, 34 };
         Rectangle addrBox = { startX + 460, formY + 42, contentW - 480, 34 };
@@ -480,27 +618,27 @@ void AppUI::DrawAdminStations() {
             }
         }
 
-        DrawTextUI("Ten tram:", startX + 20, formY + 48, 16, DARKGRAY);
+        DrawTextUI("Tên trạm:", startX + 20, formY + 48, 16, DARKGRAY);
         GuiTextBox(nameBox, newStationName, 128, activeStationName);
 
-        DrawTextUI("Dia chi:", startX + 390, formY + 48, 16, DARKGRAY);
+        DrawTextUI("Địa chỉ:", startX + 390, formY + 48, 16, DARKGRAY);
         GuiTextBox(addrBox, newStationAddress, 128, activeStationAddress);
 
-        if (GuiButton((Rectangle){ startX + contentW - 270, formY + 82, 145, 34 }, "Xac Nhan Them")) {
+        if (GuiButton((Rectangle){ startX + contentW - 270, formY + 82, 145, 34 }, "Xác Nhận Thêm")) {
             if (strlen(newStationName) == 0 || strlen(newStationAddress) == 0) {
-                stationStatusMsg = "Vui long nhap day du ten va dia chi tram!";
+                stationStatusMsg = "Vui lòng nhập đầy đủ tên và địa chỉ trạm!";
             } else {
                 string newId = sm.generateNextStationId();
                 ChargingStation st(newId, newStationName, newStationAddress);
                 sm.addStation(st);
                 autoSave();
-                stationStatusMsg = "Them tram sac " + newId + " thanh cong!";
+                stationStatusMsg = "Thêm trạm sạc " + newId + " thành công!";
                 memset(newStationName, 0, sizeof(newStationName));
                 memset(newStationAddress, 0, sizeof(newStationAddress));
                 showAddStationForm = false;
             }
         }
-        if (GuiButton((Rectangle){ startX + contentW - 115, formY + 82, 95, 34 }, "Huy")) {
+        if (GuiButton((Rectangle){ startX + contentW - 115, formY + 82, 95, 34 }, "Hủy")) {
             showAddStationForm = false;
         }
     }
@@ -511,9 +649,9 @@ void AppUI::DrawAdminStations() {
         float formH = 135.0f;
         DrawRectangleRounded((Rectangle){ startX, formY, contentW, formH }, 0.05f, 4, (Color){ 254, 243, 199, 255 });
         DrawRectangleRoundedLines((Rectangle){ startX, formY, contentW, formH }, 0.05f, 4, (Color){ 217, 119, 6, 255 });
-        DrawTextUI(TextFormat("THEM CONG SAC CHO TRAM: %s", targetStationIdForPort.c_str()), startX + 20, formY + 12, 17, (Color){ 180, 83, 9, 255 });
+        DrawTextUI(TextFormat("THÊM CỔNG SẠC CHO TRẠM: %s", targetStationIdForPort.c_str()), startX + 20, formY + 12, 17, (Color){ 180, 83, 9, 255 });
 
-        DrawTextUI("Loai cong:", startX + 20, formY + 48, 16, DARKGRAY);
+        DrawTextUI("Loại cổng:", startX + 20, formY + 48, 16, DARKGRAY);
         if (GuiButton((Rectangle){ startX + 110, formY + 44, 125, 32 }, selectedPortType == 0 ? "[AC Standard]" : "AC Standard")) selectedPortType = 0;
         if (GuiButton((Rectangle){ startX + 245, formY + 44, 110, 32 }, selectedPortType == 1 ? "[DC Fast]" : "DC Fast")) selectedPortType = 1;
         if (GuiButton((Rectangle){ startX + 365, formY + 44, 145, 32 }, selectedPortType == 2 ? "[Supercharge]" : "Supercharge")) selectedPortType = 2;
@@ -532,13 +670,13 @@ void AppUI::DrawAdminStations() {
             }
         }
 
-        DrawTextUI("Cong suat (kW):", startX + 530, formY + 48, 16, DARKGRAY);
+        DrawTextUI("Công suất (kW):", startX + 530, formY + 48, 16, DARKGRAY);
         GuiTextBox(pwrBox, newPortPower, 32, activePortPower);
 
-        DrawTextUI("Gia/kWh:", startX + 760, formY + 48, 16, DARKGRAY);
+        DrawTextUI("Giá/kWh:", startX + 760, formY + 48, 16, DARKGRAY);
         GuiTextBox(prcBox, newPortPrice, 32, activePortPrice);
 
-        if (GuiButton((Rectangle){ startX + contentW - 270, formY + 90, 145, 34 }, "Xac Nhan Them")) {
+        if (GuiButton((Rectangle){ startX + contentW - 270, formY + 90, 145, 34 }, "Xác Nhận Thêm")) {
             float pwr = (float)atof(newPortPower);
             float prc = (float)atof(newPortPrice);
             if (pwr <= 0) pwr = 22.0f;
@@ -548,10 +686,10 @@ void AppUI::DrawAdminStations() {
             ChargingPort cp(portId, (PortType)selectedPortType, pwr, prc, AVAILABLE, "");
             sm.addPortToStation(targetStationIdForPort, cp);
             autoSave();
-            stationStatusMsg = "Them cong " + portId + " vao tram " + targetStationIdForPort + " thanh cong!";
+            stationStatusMsg = "Thêm cổng " + portId + " vào trạm " + targetStationIdForPort + " thành công!";
             showAddPortForm = false;
         }
-        if (GuiButton((Rectangle){ startX + contentW - 115, formY + 90, 95, 34 }, "Huy")) {
+        if (GuiButton((Rectangle){ startX + contentW - 115, formY + 90, 95, 34 }, "Hủy")) {
             showAddPortForm = false;
         }
     }
@@ -567,10 +705,10 @@ void AppUI::DrawAdminStations() {
         DrawRectangleRoundedLines((Rectangle){ startX, y, contentW, 44 }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
 
         DrawTextUI(TextFormat("[%s] %s", st.getStationId().c_str(), st.getName().c_str()), startX + 18, y + 10, 18, (Color){ 15, 23, 42, 255 });
-        DrawTextUI(TextFormat("Dia chi: %s", st.getAddress().c_str()), startX + 270, y + 12, 16, (Color){ 71, 85, 105, 255 });
+        DrawTextUI(TextFormat("Địa chỉ: %s", st.getAddress().c_str()), startX + 270, y + 12, 16, (Color){ 71, 85, 105, 255 });
 
         // Nut Them cong sac vao tram
-        if (GuiButton((Rectangle){ startX + contentW - 240, y + 6, 125, 32 }, "+ Them Cong")) {
+        if (GuiButton((Rectangle){ startX + contentW - 240, y + 6, 125, 32 }, "+ Thêm Cổng")) {
             targetStationIdForPort = st.getStationId();
             showAddPortForm = true;
             showAddStationForm = false;
@@ -578,20 +716,20 @@ void AppUI::DrawAdminStations() {
         }
 
         // Nut Xoa tram
-        if (GuiButton((Rectangle){ startX + contentW - 105, y + 6, 95, 32 }, "Xoa Tram")) {
+        if (GuiButton((Rectangle){ startX + contentW - 105, y + 6, 95, 32 }, "Xóa Trạm")) {
             if (sm.deleteStation(st.getStationId())) {
                 autoSave();
-                stationStatusMsg = "Xoa tram " + st.getStationId() + " thanh cong!";
+                stationStatusMsg = "Xóa trạm " + st.getStationId() + " thành công!";
                 break;
             } else {
-                stationStatusMsg = "Khong the xoa tram vi dang co cong dang duoc sac!";
+                stationStatusMsg = "Không thể xóa trạm vì đang có cổng đang được sạc!";
             }
         }
         y += 50.0f;
 
         // Danh sach cac cong sac cua tram
         if (st.getPorts().empty()) {
-            DrawTextUI("  (Tram chua co cong sac nao. Nhan '+ Them Cong' de bo sung)", startX + 30, y + 5, 15, (Color){ 148, 163, 184, 255 });
+            DrawTextUI("  (Trạm chưa có cổng sạc nào. Nhấn '+ Thêm Cổng' để bổ sung)", startX + 30, y + 5, 15, (Color){ 148, 163, 184, 255 });
             y += 35.0f;
         } else {
             for (auto& p : st.getPorts()) {
@@ -600,27 +738,27 @@ void AppUI::DrawAdminStations() {
                 DrawRectangleRoundedLines((Rectangle){ startX + 20, y, contentW - 20, 38 }, 0.05f, 4, (Color){ 241, 245, 249, 255 });
 
                 string typeStr = (p.getType() == AC_STANDARD) ? "AC Standard" : ((p.getType() == DC_FAST) ? "DC Fast" : "DC Supercharge");
-                string statusStr = (p.getStatus() == AVAILABLE) ? "TRONG (Available)" : ((p.getStatus() == OCCUPIED) ? "DANG SAC" : "BAO TRI (Maintenance)");
+                string statusStr = (p.getStatus() == AVAILABLE) ? "TRỐNG (Available)" : ((p.getStatus() == OCCUPIED) ? "ĐANG SẠC" : "BẢO TRÌ (Maintenance)");
                 Color stColor = (p.getStatus() == AVAILABLE) ? (Color){ 22, 163, 74, 255 } : ((p.getStatus() == OCCUPIED) ? (Color){ 217, 119, 6, 255 } : (Color){ 220, 38, 38, 255 });
 
-                DrawTextUI(TextFormat("Cong %s: %s | %.0f kW | %.0f d/kWh", p.getPortId().c_str(), typeStr.c_str(), p.getPowerKW(), p.getPricePerKWh()), startX + 40, y + 9, 16, (Color){ 30, 41, 59, 255 });
+                DrawTextUI(TextFormat("Cổng %s: %s | %.0f kW | %.0f đ/kWh", p.getPortId().c_str(), typeStr.c_str(), p.getPowerKW(), p.getPricePerKWh()), startX + 40, y + 9, 16, (Color){ 30, 41, 59, 255 });
                 DrawTextUI(statusStr, startX + contentW * 0.52f, y + 9, 16, stColor);
 
                 // Nut Chuyen doi trang thai Bao tri / Hoat dong
                 if (p.getStatus() != OCCUPIED) {
-                    const char* btnLabel = (p.getStatus() == AVAILABLE) ? "Dat Bao Tri" : "Mo Hoat Dong";
+                    const char* btnLabel = (p.getStatus() == AVAILABLE) ? "Đặt Bảo Trì" : "Mở Hoạt Động";
                     if (GuiButton((Rectangle){ startX + contentW - 220, y + 4, 125, 30 }, btnLabel)) {
                         PortStatus newSt = (p.getStatus() == AVAILABLE) ? MAINTENANCE : AVAILABLE;
                         sm.updatePortStatus(st.getStationId(), p.getPortId(), newSt);
                         autoSave();
                     }
-                    if (GuiButton((Rectangle){ startX + contentW - 85, y + 4, 75, 30 }, "Xoa")) {
+                    if (GuiButton((Rectangle){ startX + contentW - 85, y + 4, 75, 30 }, "Xóa")) {
                         sm.deletePort(st.getStationId(), p.getPortId());
                         autoSave();
                         break;
                     }
                 } else {
-                    DrawTextUI("[Dang phuc vu xe sac]", startX + contentW - 200, y + 9, 15, (Color){ 217, 119, 6, 255 });
+                    DrawTextUI("[Đang phục vụ xe sạc]", startX + contentW - 200, y + 9, 15, (Color){ 217, 119, 6, 255 });
                 }
                 y += 44.0f;
             }
@@ -639,27 +777,27 @@ void AppUI::DrawAdminCustomers() {
     float startX = 265.0f;
     float contentW = (float)GetScreenWidth() - startX - 30.0f;
 
-    DrawTextUI("QUAN LY KHACH HANG & TAI KHOAN", startX, 25, 28, (Color){ 15, 23, 42, 255 });
+    DrawTextUI("QUẢN LÝ KHÁCH HÀNG & TÀI KHOẢN", startX, 25, 28, (Color){ 15, 23, 42, 255 });
 
     // Thanh Tim kiem
-    Rectangle searchBox = { startX + 250, 65, 320, 36 };
+    Rectangle searchBox = { startX + 270, 65, 320, 36 };
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
         Vector2 m = GetMousePosition();
         activeCustomerSearch = CheckCollisionPointRec(m, searchBox);
     }
 
-    DrawTextUI("Tim kiem (Ten / SDT / Bien so):", startX, 72, 16, DARKGRAY);
+    DrawTextUI("Tìm kiếm (Tên / SĐT / Biển số):", startX, 72, 16, DARKGRAY);
     GuiTextBox(searchBox, customerSearch, 128, activeCustomerSearch);
 
     // Nut Mo Form Them Khach Hang Moi (Can phai)
     float addCustBtnW = 245.0f;
-    if (GuiButton((Rectangle){ startX + contentW - addCustBtnW, 63, addCustBtnW, 38 }, "+ THEM TAI KHOAN KHACH")) {
+    if (GuiButton((Rectangle){ startX + contentW - addCustBtnW, 63, addCustBtnW, 38 }, "+ THÊM TÀI KHOẢN KHÁCH")) {
         showAddCustomerForm = !showAddCustomerForm;
         customerStatusMsg = "";
     }
 
     if (!customerStatusMsg.empty()) {
-        DrawTextUI(customerStatusMsg, startX, 108, 16, (customerStatusMsg.find("thanh cong") != string::npos) ? GREEN : RED);
+        DrawTextUI(customerStatusMsg, startX, 108, 16, (customerStatusMsg.find("thành công") != string::npos) ? GREEN : RED);
     }
 
     // FORM THÊM TÀI KHOẢN KHÁCH HÀNG MỚI
@@ -668,7 +806,7 @@ void AppUI::DrawAdminCustomers() {
         float formH = 190.0f;
         DrawRectangleRounded((Rectangle){ startX, formY, contentW, formH }, 0.05f, 4, (Color){ 241, 245, 249, 255 });
         DrawRectangleRoundedLines((Rectangle){ startX, formY, contentW, formH }, 0.05f, 4, (Color){ 148, 163, 184, 255 });
-        DrawTextUI("THONG TIN TAI KHOAN KHACH HANG MOI:", startX + 20, formY + 12, 17, (Color){ 30, 41, 59, 255 });
+        DrawTextUI("THÔNG TIN TÀI KHOẢN KHÁCH HÀNG MỚI:", startX + 20, formY + 12, 17, (Color){ 30, 41, 59, 255 });
 
         Rectangle bUser = { startX + 110, formY + 42, 140, 32 };
         Rectangle bPass = { startX + 355, formY + 42, 140, 32 };
@@ -692,37 +830,37 @@ void AppUI::DrawAdminCustomers() {
         }
 
         // Hang 1: Username, Password, Ho Ten
-        DrawTextUI("Username:", startX + 20, formY + 48, 15, DARKGRAY);
+        DrawTextUI("Tài khoản:", startX + 20, formY + 48, 15, DARKGRAY);
         GuiTextBox(bUser, newCustUsername, 64, activeCustField == 1);
 
-        DrawTextUI("Password:", startX + 270, formY + 48, 15, DARKGRAY);
+        DrawTextUI("Mật khẩu:", startX + 270, formY + 48, 15, DARKGRAY);
         GuiTextBox(bPass, newCustPassword, 64, activeCustField == 2);
 
-        DrawTextUI("Ho Ten:", startX + 515, formY + 48, 15, DARKGRAY);
+        DrawTextUI("Họ Tên:", startX + 515, formY + 48, 15, DARKGRAY);
         GuiTextBox(bName, newCustName, 64, activeCustField == 3);
 
         // Hang 2: SDT, Bien so, Dong xe, Dung luong pin
-        DrawTextUI("SDT:", startX + 20, formY + 95, 15, DARKGRAY);
+        DrawTextUI("SĐT:", startX + 20, formY + 95, 15, DARKGRAY);
         GuiTextBox(bPhone, newCustPhone, 32, activeCustField == 4);
 
-        DrawTextUI("Bien so xe:", startX + 270, formY + 95, 15, DARKGRAY);
+        DrawTextUI("Biển số xe:", startX + 270, formY + 95, 15, DARKGRAY);
         GuiTextBox(bPlate, newCustPlate, 32, activeCustField == 5);
 
-        DrawTextUI("Dong xe:", startX + 515, formY + 95, 15, DARKGRAY);
+        DrawTextUI("Dòng xe:", startX + 515, formY + 95, 15, DARKGRAY);
         GuiTextBox(bCar, newCustCarModel, 32, activeCustField == 6);
 
         DrawTextUI("Pin kWh:", startX + 735, formY + 95, 15, DARKGRAY);
         GuiTextBox(bBat, newCustBattery, 32, activeCustField == 7);
 
         // Hang 3: So du vi khoi tao & Nut bam
-        DrawTextUI("So du ban dau (VND):", startX + 20, formY + 142, 15, DARKGRAY);
+        DrawTextUI("Số dư ban đầu (VNĐ):", startX + 20, formY + 142, 15, DARKGRAY);
         GuiTextBox(bBal, newCustBalance, 32, activeCustField == 8);
 
-        if (GuiButton((Rectangle){ startX + contentW - 270, formY + 136, 150, 36 }, "Xac Nhan Tao")) {
+        if (GuiButton((Rectangle){ startX + contentW - 270, formY + 136, 150, 36 }, "Xác Nhận Tạo")) {
             if (strlen(newCustUsername) == 0 || strlen(newCustPassword) == 0 || strlen(newCustName) == 0) {
-                customerStatusMsg = "Vui long nhap it nhat Username, Password va Ho Ten!";
+                customerStatusMsg = "Vui lòng nhập ít nhất Tên đăng nhập, Mật khẩu và Họ Tên!";
             } else if (um.usernameExists(newCustUsername)) {
-                customerStatusMsg = "Ten dang nhap nay da ton tai trong he thong!";
+                customerStatusMsg = "Tên đăng nhập này đã tồn tại trong hệ thống!";
             } else {
                 string nextId = um.generateNextCustomerId();
                 float bat = (float)atof(newCustBattery);
@@ -734,14 +872,14 @@ void AppUI::DrawAdminCustomers() {
                            newCustPhone, newCustPlate, newCustCarModel, bat, bal);
                 um.addCustomer(c);
                 autoSave();
-                customerStatusMsg = "Tao tai khoan " + string(newCustUsername) + " (Ma: " + nextId + ") thanh cong!";
+                customerStatusMsg = "Tạo tài khoản " + string(newCustUsername) + " (Mã: " + nextId + ") thành công!";
                 showAddCustomerForm = false;
                 memset(newCustUsername, 0, sizeof(newCustUsername));
                 memset(newCustPassword, 0, sizeof(newCustPassword));
                 memset(newCustName, 0, sizeof(newCustName));
             }
         }
-        if (GuiButton((Rectangle){ startX + contentW - 110, formY + 136, 95, 36 }, "Huy")) {
+        if (GuiButton((Rectangle){ startX + contentW - 110, formY + 136, 95, 36 }, "Hủy")) {
             showAddCustomerForm = false;
         }
     }
@@ -755,13 +893,13 @@ void AppUI::DrawAdminCustomers() {
 
     // Header Bang
     DrawRectangle((int)startX, (int)tableStartY, (int)contentW, 40, (Color){ 241, 245, 249, 255 });
-    DrawTextUI("Ma KH", startX + 15, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Ho Ten", startX + contentW * 0.10f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("SDT", startX + contentW * 0.32f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Bien So", startX + contentW * 0.47f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Dong Xe", startX + contentW * 0.62f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("So Du Vi", startX + contentW * 0.74f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Thao Tac", startX + contentW - 120, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Mã KH", startX + 15, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Họ Tên", startX + contentW * 0.10f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("SĐT", startX + contentW * 0.32f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Biển Số", startX + contentW * 0.47f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Dòng Xe", startX + contentW * 0.62f, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Số Dư Ví", startX + contentW * 0.74f, tableStartY + 10, 16, (Color){ 22, 163, 74, 255 });
+    DrawTextUI("Thao Tác", startX + contentW - 120, tableStartY + 10, 16, (Color){ 71, 85, 105, 255 });
 
     string kw = toLower(customerSearch);
     float rowY = tableStartY + 50.0f;
@@ -784,7 +922,7 @@ void AppUI::DrawAdminCustomers() {
         DrawTextUI(formatMoney(c.getBalance()), startX + contentW * 0.74f, rowY, 16, (Color){ 22, 163, 74, 255 });
 
         // Nut Nạp tiền cho khách (Da thay the nut Khoa tai khoan theo yeu cau)
-        if (GuiButton((Rectangle){ startX + contentW - 125, rowY - 4, 105, 28 }, "+ Nap Tien")) {
+        if (GuiButton((Rectangle){ startX + contentW - 125, rowY - 4, 105, 28 }, "+ Nạp Tiền")) {
             showTopupModal = true;
             topupTargetCustomerId = c.getId();
             adminTopupMsg = "";
@@ -821,35 +959,39 @@ void AppUI::DrawAdminTopupModal() {
     DrawRectangleRounded((Rectangle){ modalX, modalY, modalW, modalH }, 0.05f, 4, WHITE);
     DrawRectangleRoundedLines((Rectangle){ modalX, modalY, modalW, modalH }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
 
-    // Tieu de hop thoai
+    // Tieu de hop thoai (Tông Xanh Biển và Viền Vàng Kim)
     DrawRectangleRounded((Rectangle){ modalX, modalY, modalW, 60 }, 0.05f, 4, (Color){ 30, 58, 138, 255 });
-    DrawTextUI("NAP TIEN CHO KHACH HANG", modalX + 125, modalY + 18, 22, WHITE);
+    DrawRectangleRounded((Rectangle){ modalX + 20, modalY, modalW - 40, 4 }, 0.5f, 4, (Color){ 234, 179, 8, 255 });
+    
+    float tW = 270.0f;
+    if (uiFont.texture.id != 0) tW = MeasureTextEx(uiFont, "NẠP TIỀN CHO KHÁCH HÀNG", 22, 1.0f).x;
+    DrawTextUI("NẠP TIỀN CHO KHÁCH HÀNG", modalX + (modalW - tW) / 2.0f, modalY + 18, 22, WHITE);
 
     // Thong tin khach hang
-    DrawTextUI(TextFormat("Khach hang: %s  (Ma: %s)", c->getName().c_str(), c->getId().c_str()), modalX + 35, modalY + 80, 17, (Color){ 15, 23, 42, 255 });
-    DrawTextUI(TextFormat("So du hien tai: %s", formatMoney(c->getBalance()).c_str()), modalX + 35, modalY + 115, 18, (Color){ 22, 163, 74, 255 });
+    DrawTextUI(TextFormat("Khách hàng: %s  (Mã: %s)", c->getName().c_str(), c->getId().c_str()), modalX + 35, modalY + 80, 17, (Color){ 15, 23, 42, 255 });
+    DrawTextUI(TextFormat("Số dư hiện tại: %s", formatMoney(c->getBalance()).c_str()), modalX + 35, modalY + 115, 18, (Color){ 22, 163, 74, 255 });
 
     // Cac nut chon nhanh menh gia
-    DrawTextUI("Chon nhanh menh gia:", modalX + 35, modalY + 155, 15, DARKGRAY);
-    if (GuiButton((Rectangle){ modalX + 35, modalY + 180, 105, 38 }, "+ 50k")) {
+    DrawTextUI("Chọn nhanh mệnh giá:", modalX + 35, modalY + 155, 15, DARKGRAY);
+    if (GuiButton((Rectangle){ modalX + 35, modalY + 180, 105, 38 }, "+ 50,000 đ")) {
         um.topupCustomerBalance(c->getId(), 50000.0f);
         autoSave();
-        adminTopupMsg = "Nap thanh cong 50,000 VND!";
+        adminTopupMsg = "Nạp thành công 50,000 VNĐ!";
     }
-    if (GuiButton((Rectangle){ modalX + 150, modalY + 180, 105, 38 }, "+ 100k")) {
+    if (GuiButton((Rectangle){ modalX + 150, modalY + 180, 105, 38 }, "+ 100,000 đ")) {
         um.topupCustomerBalance(c->getId(), 100000.0f);
         autoSave();
-        adminTopupMsg = "Nap thanh cong 100,000 VND!";
+        adminTopupMsg = "Nạp thành công 100,000 VNĐ!";
     }
-    if (GuiButton((Rectangle){ modalX + 265, modalY + 180, 105, 38 }, "+ 200k")) {
+    if (GuiButton((Rectangle){ modalX + 265, modalY + 180, 105, 38 }, "+ 200,000 đ")) {
         um.topupCustomerBalance(c->getId(), 200000.0f);
         autoSave();
-        adminTopupMsg = "Nap thanh cong 200,000 VND!";
+        adminTopupMsg = "Nạp thành công 200,000 VNĐ!";
     }
-    if (GuiButton((Rectangle){ modalX + 380, modalY + 180, 115, 38 }, "+ 500k")) {
+    if (GuiButton((Rectangle){ modalX + 380, modalY + 180, 115, 38 }, "+ 500,000 đ")) {
         um.topupCustomerBalance(c->getId(), 500000.0f);
         autoSave();
-        adminTopupMsg = "Nap thanh cong 500,000 VND!";
+        adminTopupMsg = "Nạp thành công 500,000 VNĐ!";
     }
 
     // Nhap so tien tuy y
@@ -859,26 +1001,26 @@ void AppUI::DrawAdminTopupModal() {
         activeAdminTopup = CheckCollisionPointRec(m, topupBox);
     }
 
-    DrawTextUI("Hoac nhap so tien tuy y (VND):", modalX + 35, modalY + 235, 15, DARKGRAY);
+    DrawTextUI("Hoặc nhập số tiền tùy ý (VNĐ):", modalX + 35, modalY + 235, 15, DARKGRAY);
     GuiTextBox(topupBox, adminTopupAmount, 32, activeAdminTopup);
 
-    if (GuiButton((Rectangle){ modalX + 330, modalY + 260, 165, 38 }, "Xac Nhan Nap")) {
+    if (GuiButton((Rectangle){ modalX + 330, modalY + 260, 165, 38 }, "Xác Nhận Nạp")) {
         float val = (float)atof(adminTopupAmount);
         if (val > 0) {
             um.topupCustomerBalance(c->getId(), val);
             autoSave();
-            adminTopupMsg = "Nap thanh cong " + formatMoney(val) + "!";
+            adminTopupMsg = "Nạp thành công " + formatMoney(val) + "!";
         } else {
-            adminTopupMsg = "Vui long nhap so tien hop le!";
+            adminTopupMsg = "Vui lòng nhập số tiền hợp lệ!";
         }
     }
 
     if (!adminTopupMsg.empty()) {
-        DrawTextUI(adminTopupMsg, modalX + 35, modalY + 315, 16, (adminTopupMsg.find("thanh cong") != string::npos) ? GREEN : RED);
+        DrawTextUI(adminTopupMsg, modalX + 35, modalY + 315, 16, (adminTopupMsg.find("thành công") != string::npos) ? GREEN : RED);
     }
 
     // Nut Dong Modal
-    if (GuiButton((Rectangle){ modalX + 180, modalY + 348, 180, 42 }, "Hoan Tat / Dong")) {
+    if (GuiButton((Rectangle){ modalX + 180, modalY + 348, 180, 42 }, "Hoàn Tất / Đóng")) {
         showTopupModal = false;
         adminTopupMsg = "";
     }
@@ -895,22 +1037,22 @@ void AppUI::DrawAdminInvoices() {
     float contentW = (float)GetScreenWidth() - startX - 30.0f;
     float tableH = (float)GetScreenHeight() - 110.0f;
 
-    DrawTextUI("LICH SU HOA DON TOAN HE THONG", startX, 25, 28, (Color){ 15, 23, 42, 255 });
+    DrawTextUI("LỊCH SỬ HÓA ĐƠN TOÀN HỆ THỐNG", startX, 25, 28, (Color){ 15, 23, 42, 255 });
 
     DrawRectangle((int)startX, 75, (int)contentW, (int)tableH, WHITE);
     DrawRectangleLines((int)startX, 75, (int)contentW, (int)tableH, (Color){ 203, 213, 225, 255 });
 
     DrawRectangle((int)startX, 75, (int)contentW, 40, (Color){ 241, 245, 249, 255 });
-    DrawTextUI("Ma Hoa Don", startX + 20, 85, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Ma Phien", startX + contentW * 0.22f, 85, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Ma Khach Hang", startX + contentW * 0.44f, 85, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Tong Tien (VND)", startX + contentW * 0.65f, 85, 16, (Color){ 71, 85, 105, 255 });
-    DrawTextUI("Thoi Gian Lap", startX + contentW * 0.82f, 85, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Mã Hóa Đơn", startX + 20, 85, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Mã Phiên", startX + contentW * 0.22f, 85, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Mã Khách Hàng", startX + contentW * 0.44f, 85, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Tổng Tiền (VNĐ)", startX + contentW * 0.65f, 85, 16, (Color){ 71, 85, 105, 255 });
+    DrawTextUI("Thời Gian Lập", startX + contentW * 0.82f, 85, 16, (Color){ 71, 85, 105, 255 });
 
     float y = 130.0f;
     auto& invs = sem.getInvoices();
     if (invs.empty()) {
-        DrawTextUI("Chua co hoa don nao duoc ghi nhan trong he thong.", startX + contentW * 0.30f, 75.0f + tableH * 0.45f, 18, (Color){ 148, 163, 184, 255 });
+        DrawTextUI("Chưa có hóa đơn nào được ghi nhận trong hệ thống.", startX + contentW * 0.30f, 75.0f + tableH * 0.45f, 18, (Color){ 148, 163, 184, 255 });
     } else {
         for (int i = (int)invs.size() - 1; i >= 0; --i) {
             auto& inv = invs[i];
@@ -940,20 +1082,23 @@ void AppUI::DrawCustomerMenu() {
 
     // Header hien thi: ID, Ten, Xe, Bien so va So du o goc tren cung
     DrawRectangle(0, 0, (int)screenW, 80, (Color){ 30, 58, 138, 255 });
+    // Dải viền Vàng Kim ở đáy header
+    DrawRectangle(0, 77, (int)screenW, 3, (Color){ 234, 179, 8, 255 });
+
     DrawTextUI("EVC CHARGING", 30, 26, 26, (Color){ 56, 189, 248, 255 });
 
-    DrawTextUI(TextFormat("%s  |  Ma: %s  |  Xe: %s (%s)", c->getName().c_str(), c->getId().c_str(), c->getCarModel().c_str(), c->getLicensePlate().c_str()), 240, 28, 17, WHITE);
+    DrawTextUI(TextFormat("%s  |  Mã: %s  |  Xe: %s (%s)", c->getName().c_str(), c->getId().c_str(), c->getCarModel().c_str(), c->getLicensePlate().c_str()), 240, 28, 17, WHITE);
 
     // O hien thi so du tai khoan noi bat ben phai
     float balBoxW = 250.0f;
     float balBoxX = screenW - balBoxW - 140.0f;
     DrawRectangleRounded((Rectangle){ balBoxX, 18, balBoxW, 44 }, 0.2f, 4, (Color){ 22, 101, 52, 255 });
-    DrawTextUI(TextFormat("So du: %s", formatMoney(c->getBalance()).c_str()), balBoxX + 15, 28, 17, (Color){ 187, 247, 208, 255 });
+    DrawTextUI(TextFormat("Số dư: %s", formatMoney(c->getBalance()).c_str()), balBoxX + 15, 28, 17, (Color){ 187, 247, 208, 255 });
 
     // Nut Dang Xuat o goc ngoai cung ben phai
     float logoutBtnW = 110.0f;
     float logoutBtnX = screenW - logoutBtnW - 20.0f;
-    if (GuiButton((Rectangle){ logoutBtnX, 18, logoutBtnW, 44 }, "Dang Xuat")) {
+    if (GuiButton((Rectangle){ logoutBtnX, 18, logoutBtnW, 44 }, "Đăng Xuất")) {
         um.logout();
         currentState = STATE_LOGIN;
         memset(loginUsername, 0, sizeof(loginUsername));
@@ -966,11 +1111,11 @@ void AppUI::DrawCustomerMenu() {
 
     // Tabs chuyen doi: CHI CON 2 TAB (Da bo tab nap tien o khach theo yeu cau)
     DrawRectangle(0, 80, (int)screenW, 50, (Color){ 241, 245, 249, 255 });
-    if (GuiButton((Rectangle){ 30, 86, 300, 38 }, customerTab == 0 ? "[ TRA CUU & SAC DIEN ]" : "Tra Cuu & Sac Dien")) {
+    if (GuiButton((Rectangle){ 30, 86, 300, 38 }, customerTab == 0 ? "[ TRA CỨU & SẠC ĐIỆN ]" : "Tra Cứu & Sạc Điện")) {
         customerTab = 0;
         customerErrorMsg = "";
     }
-    if (GuiButton((Rectangle){ 345, 86, 300, 38 }, customerTab == 1 ? "[ LICH SU HOA DON ]" : "Lich Su Hoa Don")) {
+    if (GuiButton((Rectangle){ 345, 86, 300, 38 }, customerTab == 1 ? "[ LỊCH SỬ HÓA ĐƠN ]" : "Lịch Sử Hóa Đơn")) {
         customerTab = 1;
         customerErrorMsg = "";
     }
@@ -988,7 +1133,7 @@ void AppUI::DrawCustomerMenu() {
         float y = customerErrorMsg.empty() ? 150.0f : 185.0f;
         float fullBoxW = screenW - 60.0f;
 
-        DrawTextUI("DANH SACH TRAC CUU TRAM SAC & CONG SAC KHA DUNG:", 30, y, 19, (Color){ 30, 41, 59, 255 });
+        DrawTextUI("DANH SÁCH TRA CỨU TRẠM SẠC & CỔNG SẠC KHẢ DỤNG:", 30, y, 19, (Color){ 30, 41, 59, 255 });
         y += 35.0f;
 
         for (auto& st : sm.getStations()) {
@@ -996,11 +1141,11 @@ void AppUI::DrawCustomerMenu() {
             DrawRectangleRounded((Rectangle){ 30, y, fullBoxW, 42 }, 0.05f, 4, (Color){ 226, 232, 240, 255 });
             DrawRectangleRoundedLines((Rectangle){ 30, y, fullBoxW, 42 }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
 
-            DrawTextUI(TextFormat("Tram: %s  -  Dia chi: %s", st.getName().c_str(), st.getAddress().c_str()), 45, y + 10, 17, (Color){ 15, 23, 42, 255 });
+            DrawTextUI(TextFormat("Trạm: %s  –  Địa chỉ: %s", st.getName().c_str(), st.getAddress().c_str()), 45, y + 10, 17, (Color){ 15, 23, 42, 255 });
             y += 48.0f;
 
             if (st.getPorts().empty()) {
-                DrawTextUI("  (Tram hien chua co cong sac nao)", 55, y + 5, 15, DARKGRAY);
+                DrawTextUI("  (Trạm hiện chưa có cổng sạc nào)", 55, y + 5, 15, DARKGRAY);
                 y += 32.0f;
             } else {
                 for (auto& p : st.getPorts()) {
@@ -1010,18 +1155,18 @@ void AppUI::DrawCustomerMenu() {
                     DrawRectangleRoundedLines((Rectangle){ 50, y, portBoxW, 42 }, 0.05f, 4, (Color){ 241, 245, 249, 255 });
 
                     string typeStr = (p.getType() == AC_STANDARD) ? "AC Standard" : ((p.getType() == DC_FAST) ? "DC Fast" : "DC Supercharge");
-                    string stStr = (p.getStatus() == AVAILABLE) ? "TRONG (Available)" : ((p.getStatus() == OCCUPIED) ? "DANG SAC" : "BAO TRI (Maintenance)");
+                    string stStr = (p.getStatus() == AVAILABLE) ? "TRỐNG (Khả dụng)" : ((p.getStatus() == OCCUPIED) ? "ĐANG SẠC" : "BẢO TRÌ (Maintenance)");
                     Color stColor = (p.getStatus() == AVAILABLE) ? (Color){ 22, 163, 74, 255 } : ((p.getStatus() == OCCUPIED) ? (Color){ 217, 119, 6, 255 } : (Color){ 220, 38, 38, 255 });
 
-                    DrawTextUI(TextFormat("Tru %s: %s (%.0f kW)  -  Don gia: %.0f d/kWh", p.getPortId().c_str(), typeStr.c_str(), p.getPowerKW(), p.getPricePerKWh()), 65, y + 11, 16, (Color){ 15, 23, 42, 255 });
+                    DrawTextUI(TextFormat("Trụ %s: %s (%.0f kW)  –  Đơn giá: %.0f đ/kWh", p.getPortId().c_str(), typeStr.c_str(), p.getPowerKW(), p.getPricePerKWh()), 65, y + 11, 16, (Color){ 15, 23, 42, 255 });
                     DrawTextUI(stStr, 50.0f + portBoxW * 0.55f, y + 11, 16, stColor);
 
                     // Nut Bat Dau Sac (Chi kha dung khi cong AVAILABLE)
                     if (p.getStatus() == AVAILABLE) {
                         float chargeBtnW = 180.0f;
-                        if (GuiButton((Rectangle){ 50.0f + portBoxW - chargeBtnW - 15.0f, y + 5, chargeBtnW, 32 }, "BAT DAU SAC")) {
+                        if (GuiButton((Rectangle){ 50.0f + portBoxW - chargeBtnW - 15.0f, y + 5, chargeBtnW, 32 }, "BẮT ĐẦU SẠC")) {
                             if (c->getBalance() < 20000.0f) {
-                                customerErrorMsg = "So du tai khoan khong du (Toi thieu 20.000 VND de bat dau sac)! Vui long lien he Admin de nap tien.";
+                                customerErrorMsg = "Số dư tài khoản không đủ (Tối thiểu 20.000 VNĐ để bắt đầu sạc)! Vui lòng liên hệ Quản trị viên để nạp tiền.";
                             } else {
                                 if (sem.startSession(c->getId(), st.getStationId(), p.getPortId(), sm)) {
                                     customerErrorMsg = "";
@@ -1032,9 +1177,9 @@ void AppUI::DrawCustomerMenu() {
                             }
                         }
                     } else if (p.getStatus() == OCCUPIED) {
-                        DrawTextUI("(Dang co xe sac)", 50.0f + portBoxW - 190.0f, y + 11, 15, (Color){ 217, 119, 6, 255 });
+                        DrawTextUI("(Đang có xe sạc)", 50.0f + portBoxW - 190.0f, y + 11, 15, (Color){ 217, 119, 6, 255 });
                     } else {
-                        DrawTextUI("(Tam ngung bao tri)", 50.0f + portBoxW - 190.0f, y + 11, 15, (Color){ 220, 38, 38, 255 });
+                        DrawTextUI("(Tạm ngưng bảo trì)", 50.0f + portBoxW - 190.0f, y + 11, 15, (Color){ 220, 38, 38, 255 });
                     }
 
                     y += 48.0f;
@@ -1054,17 +1199,17 @@ void AppUI::DrawCustomerMenu() {
         DrawRectangle(30, 150, (int)tableW, (int)tableH, WHITE);
         DrawRectangleLines(30, 150, (int)tableW, (int)tableH, (Color){ 203, 213, 225, 255 });
 
-        DrawTextUI("LICH SU CAC HOA DON SAC CUA BAN", 50, 168, 22, (Color){ 30, 41, 59, 255 });
+        DrawTextUI("LỊCH SỬ CÁC HÓA ĐƠN SẠC CỦA BẠN", 50, 168, 22, (Color){ 30, 41, 59, 255 });
 
         DrawRectangle(45, 210, (int)tableW - 30, 40, (Color){ 241, 245, 249, 255 });
-        DrawTextUI("Ma Hoa Don", 65, 220, 16, (Color){ 71, 85, 105, 255 });
-        DrawTextUI("Ma Phien Sac", 45.0f + tableW * 0.28f, 220, 16, (Color){ 71, 85, 105, 255 });
-        DrawTextUI("So Tien Thanh Toan", 45.0f + tableW * 0.55f, 220, 16, (Color){ 71, 85, 105, 255 });
-        DrawTextUI("Thoi Gian Lap", 45.0f + tableW * 0.78f, 220, 16, (Color){ 71, 85, 105, 255 });
+        DrawTextUI("Mã Hóa Đơn", 65, 220, 16, (Color){ 71, 85, 105, 255 });
+        DrawTextUI("Mã Phiên Sạc", 45.0f + tableW * 0.28f, 220, 16, (Color){ 71, 85, 105, 255 });
+        DrawTextUI("Số Tiền Thanh Toán", 45.0f + tableW * 0.55f, 220, 16, (Color){ 71, 85, 105, 255 });
+        DrawTextUI("Thời Gian Lập", 45.0f + tableW * 0.78f, 220, 16, (Color){ 71, 85, 105, 255 });
 
         auto myInvs = sem.getInvoicesByCustomer(c->getId());
         if (myInvs.empty()) {
-            DrawTextUI("Ban chua co hoa don sac nao trong he thong.", tableW * 0.35f, 350, 18, (Color){ 148, 163, 184, 255 });
+            DrawTextUI("Bạn chưa có hóa đơn sạc nào trong hệ thống.", tableW * 0.35f, 350, 18, (Color){ 148, 163, 184, 255 });
         } else {
             float y = 265.0f;
             for (int i = (int)myInvs.size() - 1; i >= 0; --i) {
@@ -1126,8 +1271,8 @@ void AppUI::DrawCustomerCharging() {
     DrawRectangle(0, 0, (int)screenW, (int)screenH, (Color){ 15, 23, 42, 255 });
 
     // Tieu de
-    DrawTextUICentered("XE CUA BAN DANG DUOC SAC DIEN", 45, 32, (Color){ 56, 189, 248, 255 });
-    DrawTextUICentered(TextFormat("Tram: %s  |  Dia chi: %s  |  Cong sac: %s (%.0f kW)", stName.c_str(), stAddr.c_str(), ses->getPortId().c_str(), pwr), 95, 17, (Color){ 203, 213, 225, 255 });
+    DrawTextUICentered("XE CỦA BẠN ĐANG ĐƯỢC SẠC ĐIỆN", 45, 32, (Color){ 56, 189, 248, 255 });
+    DrawTextUICentered(TextFormat("Trạm: %s  |  Địa chỉ: %s  |  Cổng sạc: %s (%.0f kW)", stName.c_str(), stAddr.c_str(), ses->getPortId().c_str(), pwr), 95, 17, (Color){ 203, 213, 225, 255 });
 
     // Khung dong ho hien thi thong so can giua
     float boxW = 800.0f;
@@ -1152,7 +1297,7 @@ void AppUI::DrawCustomerCharging() {
     DrawRectangleRounded((Rectangle){ barX + waveOffset * 0.5f, barY + 2.0f, 150.0f, barH - 4.0f }, 0.2f, 4, (Color){ 34, 197, 94, 120 });
 
     // Chu trang thai sac can giua trong thanh
-    string statusText = "DANG SAC DIEN (CHARGING IN PROGRESS)...";
+    string statusText = "ĐANG SẠC ĐIỆN (CHARGING IN PROGRESS)...";
     float stTxtW = 340.0f;
     if (uiFont.texture.id != 0) stTxtW = MeasureTextEx(uiFont, statusText.c_str(), 19, 1.0f).x;
     DrawTextUI(statusText, barX + (barW - stTxtW) / 2.0f, barY + 16, 19, (Color){ 74, 222, 128, 255 });
@@ -1161,33 +1306,33 @@ void AppUI::DrawCustomerCharging() {
     float col1X = boxX + 80.0f;
     float col2X = boxX + boxW / 2.0f + 40.0f;
 
-    DrawTextUI("Thoi gian da sac:", col1X, boxY + 130, 17, (Color){ 148, 163, 184, 255 });
-    DrawTextUI(TextFormat("%02d phut %02d giay", mins, secs), col1X, boxY + 160, 32, WHITE);
+    DrawTextUI("Thời gian đã sạc:", col1X, boxY + 130, 17, (Color){ 148, 163, 184, 255 });
+    DrawTextUI(TextFormat("%02d phút %02d giây", mins, secs), col1X, boxY + 160, 32, WHITE);
 
     // Thong so 2: Dien nang da nap (kWh)
-    DrawTextUI("Dien nang da nap:", col2X, boxY + 130, 17, (Color){ 148, 163, 184, 255 });
+    DrawTextUI("Điện năng đã nạp:", col2X, boxY + 130, 17, (Color){ 148, 163, 184, 255 });
     DrawTextUI(TextFormat("%.2f kWh", currentKWh), col2X, boxY + 160, 32, (Color){ 56, 189, 248, 255 });
 
     // Thong so 3: Chi phi tam tinh
-    DrawTextUI("Chi phi tam tinh:", col1X, boxY + 240, 17, (Color){ 148, 163, 184, 255 });
+    DrawTextUI("Chi phí tạm tính:", col1X, boxY + 240, 17, (Color){ 148, 163, 184, 255 });
     DrawTextUI(formatMoney(currentCost), col1X, boxY + 270, 32, (Color){ 250, 204, 21, 255 });
 
     // Thong so 4: So du vi hien tai
-    DrawTextUI("So du vi hien tai:", col2X, boxY + 240, 17, (Color){ 148, 163, 184, 255 });
+    DrawTextUI("Số dư ví hiện tại:", col2X, boxY + 240, 17, (Color){ 148, 163, 184, 255 });
     DrawTextUI(formatMoney(c->getBalance()), col2X, boxY + 270, 32, (Color){ 74, 222, 128, 255 });
 
     // Canh bao neu chi phi vuot qua so du
     if (currentCost > c->getBalance()) {
-        DrawTextUI("Luu y: Chi phi da vuot qua so du! Vui long dung sac de thanh toan.", col1X, boxY + 345, 16, RED);
+        DrawTextUI("Lưu ý: Chi phí đã vượt quá số dư! Vui lòng dừng sạc để thanh toán.", col1X, boxY + 345, 16, RED);
     } else {
-        DrawTextUI("Giu an toan - Khong ngat day sac khi chua bam dung sac tren man hinh.", col1X, boxY + 345, 15, (Color){ 148, 163, 184, 255 });
+        DrawTextUI("Giữ an toàn – Không ngắt dây sạc khi chưa bấm dừng sạc trên màn hình.", col1X, boxY + 345, 15, (Color){ 148, 163, 184, 255 });
     }
 
     // Nut Dung Sac & Thanh Toan can giua
     float stopBtnW = 440.0f;
     float stopBtnH = 60.0f;
     float stopBtnX = boxX + (boxW - stopBtnW) / 2.0f;
-    if (GuiButton((Rectangle){ stopBtnX, boxY + 410, stopBtnW, stopBtnH }, "DUNG SAC & THANH TOAN")) {
+    if (GuiButton((Rectangle){ stopBtnX, boxY + 410, stopBtnW, stopBtnH }, "DỪNG SẠC & THANH TOÁN")) {
         receiptStationName = stName;
         receiptPortId = ses->getPortId();
         receiptKWh = currentKWh;
@@ -1225,15 +1370,16 @@ void AppUI::DrawCustomerReceipt() {
     DrawRectangleRounded((Rectangle){ cardX, cardY, cardW, cardH }, 0.05f, 4, WHITE);
     DrawRectangleRoundedLines((Rectangle){ cardX, cardY, cardW, cardH }, 0.05f, 4, (Color){ 203, 213, 225, 255 });
 
-    // Header Hoa don
+    // Header Hoa don (Xanh lá thành công kết hợp dải vàng)
     DrawRectangleRounded((Rectangle){ cardX, cardY, cardW, 90 }, 0.05f, 4, (Color){ 22, 101, 52, 255 });
+    DrawRectangleRounded((Rectangle){ cardX + 20, cardY, cardW - 40, 4 }, 0.5f, 4, (Color){ 234, 179, 8, 255 });
     
-    string successTxt = "THANH TOAN THANH CONG!";
+    string successTxt = "THANH TOÁN THÀNH CÔNG!";
     float sTxtW = 260.0f;
     if (uiFont.texture.id != 0) sTxtW = MeasureTextEx(uiFont, successTxt.c_str(), 24, 1.0f).x;
     DrawTextUI(successTxt, cardX + (cardW - sTxtW) / 2.0f, cardY + 22, 24, WHITE);
     
-    string subTxt = "Hoa Don Dien Tu - PBL2 EV Station";
+    string subTxt = "Hóa Đơn Điện Tử – PBL2 EV Station";
     float subW = 240.0f;
     if (uiFont.texture.id != 0) subW = MeasureTextEx(uiFont, subTxt.c_str(), 16, 1.0f).x;
     DrawTextUI(subTxt, cardX + (cardW - subW) / 2.0f, cardY + 54, 16, (Color){ 187, 247, 208, 255 });
@@ -1241,23 +1387,23 @@ void AppUI::DrawCustomerReceipt() {
     float y = cardY + 120.0f;
     float textX = cardX + 40.0f;
 
-    DrawTextUI(TextFormat("Ma hoa don: %s", receiptInvoiceId.c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
-    DrawTextUI(TextFormat("Khach hang: %s (%s)", c->getName().c_str(), c->getId().c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
-    DrawTextUI(TextFormat("Bien so xe: %s  -  Xe: %s", c->getLicensePlate().c_str(), c->getCarModel().c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
-    DrawTextUI(TextFormat("Tram sac: %s  (Cong %s)", receiptStationName.c_str(), receiptPortId.c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
-    DrawTextUI(TextFormat("Dien nang nap: %.2f kWh", receiptKWh), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
+    DrawTextUI(TextFormat("Mã hóa đơn: %s", receiptInvoiceId.c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
+    DrawTextUI(TextFormat("Khách hàng: %s (%s)", c->getName().c_str(), c->getId().c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
+    DrawTextUI(TextFormat("Biển số xe: %s  –  Dòng xe: %s", c->getLicensePlate().c_str(), c->getCarModel().c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
+    DrawTextUI(TextFormat("Trạm sạc: %s  (Cổng %s)", receiptStationName.c_str(), receiptPortId.c_str()), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
+    DrawTextUI(TextFormat("Điện năng nạp: %.2f kWh", receiptKWh), textX, y, 17, (Color){ 15, 23, 42, 255 }); y += 40.0f;
 
     DrawLine((int)textX, (int)y, (int)(cardX + cardW - 40.0f), (int)y, (Color){ 203, 213, 225, 255 }); y += 25.0f;
 
-    DrawTextUI("TONG TIEN DA TRU:", textX, y, 18, (Color){ 185, 28, 28, 255 });
+    DrawTextUI("TỔNG TIỀN ĐÃ TRỪ:", textX, y, 18, (Color){ 185, 28, 28, 255 });
     DrawTextUI(formatMoney(receiptCost), cardX + cardW - 220.0f, y, 20, (Color){ 185, 28, 28, 255 }); y += 42.0f;
 
-    DrawTextUI("So du vi con lai:", textX, y, 18, (Color){ 21, 128, 61, 255 });
+    DrawTextUI("Số dư ví còn lại:", textX, y, 18, (Color){ 21, 128, 61, 255 });
     DrawTextUI(formatMoney(receiptRemainingBal), cardX + cardW - 220.0f, y, 20, (Color){ 21, 128, 61, 255 }); y += 55.0f;
 
     float backBtnW = 340.0f;
     float backBtnX = cardX + (cardW - backBtnW) / 2.0f;
-    if (GuiButton((Rectangle){ backBtnX, y, backBtnW, 48 }, "QUAY LAI MENU CHINH")) {
+    if (GuiButton((Rectangle){ backBtnX, y, backBtnW, 48 }, "QUAY LẠI MENU CHÍNH")) {
         currentState = STATE_CUSTOMER_MENU;
     }
 }
